@@ -1,24 +1,28 @@
 import { useEffect, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type BrowseObject, type ContainerStats, type Instance, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
+import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/ConfirmDialog";
 
 type Tab = "simple" | "advanced";
 
 export default function InstancePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const [instance, setInstance] = useState<Instance | null>(null);
   const [tab, setTab] = useState<Tab>("simple");
-  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!id) return;
     try {
       setInstance(await api.getInstance(id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.push(err instanceof Error ? err.message : String(err), "error");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   useEffect(() => {
@@ -28,16 +32,32 @@ export default function InstancePage() {
   }, [refresh]);
 
   async function handleDelete() {
-    if (!id || !confirm("Delete this database instance? This cannot be undone.")) return;
-    await api.deleteInstance(id);
-    navigate("/");
+    if (!id) return;
+    const ok = await confirmDialog({
+      title: "Delete this database?",
+      description: `${instance?.name ?? "This instance"} and its data will be permanently removed. This cannot be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteInstance(id);
+      toast.push("Instance deleted.", "success");
+      navigate("/");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    }
   }
 
-  if (error) return <div className="banner error">{error}</div>;
-  if (!instance) return <p>Loading…</p>;
+  if (!instance) {
+    return <div className="skeleton" style={{ height: 200, borderRadius: "var(--radius)" }} />;
+  }
 
   return (
     <div>
+      <Link to="/" className="back-link">
+        ← All instances
+      </Link>
       <div className="instance-header">
         <div>
           <h1>{instance.name}</h1>
@@ -50,7 +70,12 @@ export default function InstancePage() {
         </button>
       </div>
 
-      {instance.status === "creating" && <div className="banner info">Provisioning your database — this usually takes 10-30 seconds.</div>}
+      {instance.status === "creating" && (
+        <div className="banner info">
+          <span className="spinner" style={{ marginRight: 8 }} />
+          Provisioning your database — this usually takes 10-30 seconds.
+        </div>
+      )}
       {instance.status === "error" && <div className="banner error">Failed to provision: {instance.error}</div>}
 
       {instance.status === "running" && (
@@ -81,20 +106,28 @@ function SimpleView({ instance }: { instance: Instance }) {
 
 function ConnectPanel({ instance }: { instance: Instance }) {
   const conn = instance.connection;
+  const [revealed, setRevealed] = useState(false);
   if (!conn) return null;
   const envVar = instance.engine === "postgres" ? "DATABASE_URL" : "MONGODB_URI";
-  const envSnippet = `${envVar}=${conn.connectionString}`;
+  const masked = conn.connectionString.replace(/:([^:@/]+)@/, ":••••••••@");
+  const display = revealed ? conn.connectionString : masked;
+  const envSnippet = `${envVar}=${display}`;
 
   return (
     <section className="panel">
-      <h2>Connect</h2>
-      <CopyField label="Connection URL" value={conn.connectionString} />
-      <CopyField label=".env" value={envSnippet} />
+      <div className="panel-head">
+        <h2>Connect</h2>
+        <button className="ghost" onClick={() => setRevealed((r) => !r)}>
+          {revealed ? "Hide password" : "Reveal password"}
+        </button>
+      </div>
+      <CopyField label="Connection URL" value={display} copyValue={conn.connectionString} />
+      <CopyField label=".env" value={envSnippet} copyValue={`${envVar}=${conn.connectionString}`} />
     </section>
   );
 }
 
-function CopyField({ label, value }: { label: string; value: string }) {
+function CopyField({ label, value, copyValue }: { label: string; value: string; copyValue?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="copy-field">
@@ -103,7 +136,7 @@ function CopyField({ label, value }: { label: string; value: string }) {
         <code>{value}</code>
         <button
           onClick={() => {
-            navigator.clipboard.writeText(value);
+            navigator.clipboard.writeText(copyValue ?? value);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
           }}
@@ -116,12 +149,13 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 function BrowsePanel({ instance }: { instance: Instance }) {
+  const toast = useToast();
   const [objects, setObjects] = useState<BrowseObject[]>([]);
   const [selected, setSelected] = useState<BrowseObject | null>(null);
   const [rows, setRows] = useState<QueryResult | null>(null);
   const [queryText, setQueryText] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
-  const [queryError, setQueryError] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
   const label = instance.engine === "mongodb" ? "Collections" : "Tables";
 
   useEffect(() => {
@@ -130,16 +164,21 @@ function BrowsePanel({ instance }: { instance: Instance }) {
 
   async function openObject(obj: BrowseObject) {
     setSelected(obj);
-    const result = await api.browseObject(instance.id, obj.name, obj.schema, 100, 0);
-    setRows(result);
+    try {
+      setRows(await api.browseObject(instance.id, obj.name, obj.schema, 100, 0));
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    }
   }
 
   async function runQuery() {
-    setQueryError(null);
+    setRunning(true);
     try {
       setQueryResult(await api.runQuery(instance.id, queryText));
     } catch (err) {
-      setQueryError(err instanceof Error ? err.message : String(err));
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setRunning(false);
     }
   }
 
@@ -171,16 +210,21 @@ function BrowsePanel({ instance }: { instance: Instance }) {
       </div>
 
       <div className="query-runner">
-        <h3>{instance.engine === "postgres" ? "Run SQL" : 'Run a query — {"collection": "...", "filter": {...}}'}</h3>
+        <h3>{instance.engine === "postgres" ? "Run SQL" : "Run a query"}</h3>
         <textarea
           value={queryText}
           onChange={(e) => setQueryText(e.target.value)}
           placeholder={instance.engine === "postgres" ? "select * from my_table limit 50;" : '{"collection": "users", "filter": {}}'}
           rows={4}
         />
-        <button onClick={runQuery}>Run</button>
-        {queryError && <div className="banner error">{queryError}</div>}
-        {queryResult && <ResultTable result={queryResult} />}
+        <button className="primary" onClick={runQuery} disabled={running || !queryText.trim()}>
+          {running ? "Running…" : "Run"}
+        </button>
+        {queryResult && (
+          <div style={{ marginTop: 14 }}>
+            <ResultTable result={queryResult} />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -220,8 +264,12 @@ function formatCell(value: unknown): string {
 }
 
 function AdvancedView({ instance }: { instance: Instance }) {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
   const [stats, setStats] = useState<ContainerStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
   const [logs, setLogs] = useState("");
+  const [logsError, setLogsError] = useState<string | null>(null);
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof api.listBackups>>>([]);
   const [busy, setBusy] = useState(false);
 
@@ -231,8 +279,20 @@ function AdvancedView({ instance }: { instance: Instance }) {
 
   useEffect(() => {
     const poll = () => {
-      api.getMetrics(instance.id).then(setStats).catch(() => undefined);
-      api.getLogs(instance.id).then(setLogs).catch(() => undefined);
+      api
+        .getMetrics(instance.id)
+        .then((s) => {
+          setStats(s);
+          setStatsError(null);
+        })
+        .catch((err) => setStatsError(err instanceof Error ? err.message : String(err)));
+      api
+        .getLogs(instance.id)
+        .then((l) => {
+          setLogs(l);
+          setLogsError(null);
+        })
+        .catch((err) => setLogsError(err instanceof Error ? err.message : String(err)));
     };
     poll();
     refreshBackups();
@@ -245,17 +305,28 @@ function AdvancedView({ instance }: { instance: Instance }) {
     try {
       await api.createBackup(instance.id);
       refreshBackups();
+      toast.push("Backup created.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setBusy(false);
     }
   }
 
   async function handleRestore(backupId: string) {
-    if (!confirm("Restore this backup? Current data may be overwritten.")) return;
+    const ok = await confirmDialog({
+      title: "Restore this backup?",
+      description: "Current data may be overwritten by the contents of this backup.",
+      confirmLabel: "Restore",
+      danger: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       await api.restoreBackup(instance.id, backupId);
-      alert("Restore complete.");
+      toast.push("Restore complete.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setBusy(false);
     }
@@ -274,8 +345,14 @@ function AdvancedView({ instance }: { instance: Instance }) {
             <Metric label="Disk read" value={formatBytes(stats.blkReadBytes)} />
             <Metric label="Disk write" value={formatBytes(stats.blkWriteBytes)} />
           </div>
+        ) : statsError ? (
+          <p className="empty">Metrics unavailable: {statsError}</p>
         ) : (
-          <p className="empty">Waiting for metrics…</p>
+          <div className="metrics-grid">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="metric skeleton" style={{ height: 52 }} />
+            ))}
+          </div>
         )}
       </section>
 
@@ -298,10 +375,12 @@ function AdvancedView({ instance }: { instance: Instance }) {
       </section>
 
       <section className="panel">
-        <h2>Backups</h2>
-        <button onClick={handleBackup} disabled={busy}>
-          {busy ? "Working…" : "Create backup now"}
-        </button>
+        <div className="panel-head">
+          <h2>Backups</h2>
+          <button className="primary" onClick={handleBackup} disabled={busy}>
+            {busy ? "Working…" : "Create backup now"}
+          </button>
+        </div>
         {backups.length === 0 ? (
           <p className="empty">No backups yet.</p>
         ) : (
@@ -332,7 +411,11 @@ function AdvancedView({ instance }: { instance: Instance }) {
 
       <section className="panel">
         <h2>Logs</h2>
-        <pre className="logs">{logs || "(no logs yet)"}</pre>
+        {logsError && !logs ? (
+          <p className="empty">Logs unavailable: {logsError}</p>
+        ) : (
+          <pre className="logs">{logs || "(no logs yet)"}</pre>
+        )}
       </section>
     </div>
   );

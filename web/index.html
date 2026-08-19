@@ -3,7 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Wharf</title>
+    <meta name="description" content="Wharf — spin up, browse, and connect to any database. Self-hosted, open source, one place for every engine." />
+    <meta name="theme-color" content="#0b0d12" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%230f1115'/%3E%3Cpath d='M3 18h18M6 18V9M12 18V5M18 18V11' stroke='%234fb3ff' stroke-width='2' stroke-linecap='round' fill='none'/%3E%3C/svg%3E"
+    />
+    <title>Wharf — where your data docks</title>
+    <script>
+      // Set the theme before first paint to avoid a flash of the wrong theme.
+      (function () {
+        var saved = localStorage.getItem("wharf-theme");
+        var theme = saved === "light" || saved === "dark" ? saved : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
