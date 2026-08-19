@@ -1,7 +1,7 @@
 # alldb — Plan
 
-**One place to spin up, browse, and connect to any database.**
-Open source. Self-host it or use the managed cloud. Built to be as easy as pasting a URL — for humans and for AI agents.
+**The best possible place to spin up, look at, and connect to a database — nothing else.**
+Open source. Self-host it or use the managed cloud. Adapts to who's using it: a newbie gets a URL and a button; a senior engineer gets full config, logs, and shell access on the same instance.
 
 ---
 
@@ -9,89 +9,108 @@ Open source. Self-host it or use the managed cloud. Built to be as easy as pasti
 
 Running a database today means picking a vendor per engine (RDS for Postgres, Atlas for Mongo, Upstash for Redis...), learning each one's console, and stitching together credentials by hand. That's fine for an experienced backend engineer. It is *not* fine for the growing population of people — indie hackers, AI-assisted ("vibe coding") developers, small businesses — who need a database to exist in the next 30 seconds, with a connection string, a way to look at the data, and nothing else to think about.
 
-There's no single, open, self-hostable control plane that treats "give me a Postgres" and "give me a MongoDB" and "give me a Redis" as the same three-click action.
+Existing "one-click database" tools (see §6.1) treat databases as one feature among many (app hosting, static sites, cron jobs, 280 one-click templates). None of them treat *just the database* as the whole product — which means none of them have made the actual "look at my data" experience genuinely excellent. That gap is the opening.
 
 ## 2. What alldb is
 
-A control plane + web UI + CLI + API that:
+A control plane + web UI + CLI + API that does **one job** — hosting and browsing databases — better than anything that does it as a side feature:
 
-1. Spins up a **single-tenant instance** of a database engine (Postgres, MySQL, MongoDB, Redis, ClickHouse, ... — see §6) from a versioned reference definition.
-2. Hands back a **connection URL**, credentials, and a **web-based data browser** immediately.
-3. Works identically whether it's deployed on **alldb Cloud** (hosted by us) or **self-hosted** by a business on their own infrastructure (Docker / Kubernetes / bare VM) — same OSS core either way.
-4. Exposes everything through an API and an **MCP server**, so AI coding agents can provision and use a database without a human touching a console.
+1. Spins up a **single-tenant instance** of a database engine from a versioned reference definition.
+2. Hands back a **connection URL**, credentials, and a **best-in-class web-based data browser** immediately.
+3. Presents the same instance differently depending on who's looking: a **simple view** (URL, connect snippet, browse button) by default, and an **advanced view** (raw config, resource limits, logs, shell, replication/backup policy) one click away. Same object, same data — not two products.
+4. Works identically whether it's deployed on **alldb Cloud** (hosted by us) or **self-hosted** by a business on their own infrastructure — same OSS core either way.
 
-The name is the pitch: *all* the databases, *one* place.
+We are deliberately *not* a general PaaS. No app hosting, no static sites, no cron jobs, no 280-template catalog. Databases only, done all the way.
 
-## 3. Non-goals (v1)
+## 3. Non-goals
 
-- We are not building a new database engine. We orchestrate existing ones (official Docker images) — no forked storage engines.
-- We are not building a horizontally-scaled multi-tenant shared cluster (i.e. not "one big Postgres with schemas per customer"). Each instance is its own isolated process/container — simpler operationally, simpler for backups, simpler for the "it's just your database" mental model. Pooled/shared low-cost tiers can come later as a data-plane strategy, not a v1 requirement.
-- We are not building a BI/analytics tool. The data browser is for inspection and light querying, not dashboards.
+- Not a new database engine. We orchestrate existing ones (official images) — no forked storage engines.
+- Not a general app-hosting / PaaS platform (this is the line that separates alldb from Coolify/Railway/Elestio — see §6.1). If a feature request is "also deploy my app," the answer is no.
+- Not a horizontally-scaled multi-tenant shared cluster. Each instance is its own isolated process/container. Pooled/shared low-cost tiers are a later data-plane optimization, not a v1 requirement.
+- Not a BI/analytics tool. The data browser is for inspection and light querying, not dashboards.
+- **Not AI-agent-first at launch.** MCP/agent access is real (§14) but is not the thing that has to win people over first — the human experience does. See §6.1 on why racing to be "the AI-native one" isn't the wedge.
 
 ## 4. Core principles
 
 - **One command, one URL.** `alldb create postgres` (or a UI click) → running instance → connection string. No YAML required to get started.
+- **Progressive disclosure, not two products.** Every instance has exactly one simple view and one advanced view. The simple view is the default and hides everything except connect + browse. The advanced view reveals the same instance's full config, logs, resource limits, and shell — nothing is duplicated or diverges; "advanced" is just more of the same object visible. This is the concrete mechanism behind "adapts to whoever's using it," not a vague aspiration.
+- **The data browser is the product, not a bolted-on Adminer link.** If someone opens alldb just to look at their data — with no intention of ever using the browse-and-connect flow — it should still be the best tool they've used for that, per engine.
 - **Reference services, not magic.** Every engine is a documented, versioned "service definition" (image + config + health check + backup/restore scripts + connection-string template). Anyone can read it, fork it, or add a new engine by writing one.
-- **Self-host = full product, not a crippled tier.** The OSS control plane does everything the hosted cloud does. The cloud is a convenience (someone else runs the control plane and pays for the boxes), not a feature unlock. This is the credibility bar for the OSS/dev community.
-- **AI-native from day one.** Treat "an LLM agent is the driver" as a first-class client, not an afterthought bolted on later. MCP server, machine-readable errors, idempotent create calls.
+- **Self-host = full product, not a crippled tier.** The OSS control plane does everything the hosted cloud does. This is the credibility bar for the OSS/dev community.
 - **Production-grade by default.** Backups, TLS, resource limits, and restart policies are not opt-in add-ons — they're what "create an instance" does.
 
 ## 5. User journey (what it feels like)
 
-**Human, via web UI:**
-1. Sign in → "New Database" → pick engine (Postgres 16, Mongo 7, Redis 7, ...) → pick size/region → Create.
-2. ~10–30s later: status = running. Page shows connection URL, a copyable `.env` snippet, and a "Browse data" button.
-3. Data browser opens: tables/collections/keys, run a query/command, view rows, export CSV/JSON.
-4. "Connect" tab: ready-made snippets for psql/mongosh/redis-cli, and for common app stacks (Node/Prisma, Python/SQLAlchemy, Django, Rails, Go).
+**Newbie / vibe-coder, via web UI:**
+1. "New Database" → pick Postgres → Create. No size/region decisions forced on them — sane defaults, changeable later in the advanced view.
+2. ~10–30s later: connection URL, `.env` snippet, "Browse data" button. That's the whole screen.
+3. Data browser: tables, run a query, view rows. No jargon, no unexplained knobs.
 
-**AI agent, via MCP/API:**
-1. Agent calls `create_database(engine="postgres")`.
-2. Gets back `{connection_url, host, port, admin_ui_url}` as structured JSON.
-3. Agent runs migrations directly against the URL. No human ever opened a console.
+**Senior engineer, same instance:**
+1. Clicks "Advanced" on that same instance.
+2. Sees raw config, CPU/mem/disk graphs, connection pool settings, backup schedule, a shell into the container, structured logs.
+3. Everything the simple view hid is here — nothing is a separate product or a paid unlock.
 
 **Business, self-hosting:**
-1. `docker compose up` (or Helm chart) on their own cloud account.
-2. Same UI/API as alldb Cloud, pointed at their own infra credentials (their AWS/GCP/DO account, or bare metal).
-3. Their engineers get one internal portal for every database their org runs, instead of five vendor consoles.
+1. `docker compose up` on their own infra.
+2. Same UI/API as alldb Cloud, their own AWS/GCP/DO account or bare metal.
+3. Their engineers get one internal portal for every database their org runs.
+
+**AI agent (post-MVP, §14):**
+1. Agent calls `create_database(engine="postgres")` via MCP, gets `{connection_url, admin_ui_url}` back.
+2. Runs migrations directly. No human touches a console.
+3. This works *because* the underlying product is already excellent for humans — the agent surface rides on top, it doesn't have to carry the product on its own.
 
 ## 6. Supported engines
 
-Ship a **thin, correct** MVP set, then grow via the reference-service pattern.
+Depth before breadth. Ship **one engine done exceptionally well**, prove the wedge, then expand via the reference-manifest pattern.
 
 | Phase | Engines |
 |---|---|
-| MVP (Phase 1) | PostgreSQL, MySQL/MariaDB, MongoDB, Redis/Valkey |
-| Phase 2 | ClickHouse, Elasticsearch/OpenSearch, SQLite (ephemeral/dev), MinIO (S3-compatible) |
-| Phase 3 | Vector DBs (Qdrant, Weaviate), Kafka/NATS (adjacent but same UX), Neo4j |
+| MVP (Phase 1) | **PostgreSQL only** — the whole simple/advanced UI, the whole data-browser experience, built and polished against one engine first |
+| Phase 2 | MySQL/MariaDB, MongoDB, Redis/Valkey — prove the manifest pattern generalizes |
+| Phase 3 | ClickHouse, Elasticsearch/OpenSearch, MinIO, SQLite (ephemeral/dev) |
+| Phase 4 | Vector DBs (Qdrant, Weaviate), Neo4j |
 
-Each engine is defined by one **service manifest** (see §8) — adding an engine should be a PR that adds one manifest + tests, not a change to the control plane.
+Each engine is defined by one **service manifest** (see §8) — adding an engine should be a PR that adds one manifest + a data-browser adapter, not a change to the control plane. But manifest-portability is a Phase 2 proof point, not a Phase 1 goal — Phase 1's only goal is "is the Postgres experience good enough that people talk about it."
+
+### 6.1 Competitive reality (why this scope, honestly)
+
+This space is not empty:
+
+- **Coolify** (Apache-2.0, 55k+ GitHub stars) already does one-click Postgres/MySQL/Mongo/Redis, self-hosted, as one feature of a broader PaaS (280+ app/service templates). It has years of head start and community gravity.
+- **Elestio** / **Northflank** — managed, BYOC, 25+ engines, SOC2/HIPAA compliance already in place.
+- **Selfhost.dev** already ships 150+ MCP tools for provisioning/managing databases from Claude/Cursor — the "AI-agent-native" angle is not an open door, it's contested.
+- **Railway** sets the UX bar for "click → URL → done" (not open source, not self-hostable).
+
+None of them make the *database itself* — browsing it, understanding it, working with it day to day — the whole product with a UI that scales from total beginner to power user on the same instance. That gap, not breadth of engines or being first with an MCP server, is what alldb is betting on. Racing incumbents on breadth (more engines, more compliance certs, more infra options) is a losing game for a new, smaller entrant — racing them on depth of one experience is not.
 
 ## 7. Architecture
 
 ```
                         ┌─────────────────────────┐
                         │        Web UI / CLI       │
+                        │  (simple view / advanced   │
+                        │   view — same instance)     │
                         └────────────┬─────────────┘
-                                     │ REST/GraphQL + WS(logs/metrics)
+                                     │ REST + WS(logs/metrics)
                         ┌────────────▼─────────────┐
                         │       Control Plane        │
-                        │  (API, auth, billing,      │
-                        │   scheduler, metadata DB)   │
+                        │  (API, auth, scheduler,    │
+                        │   metadata DB)              │
                         └──┬──────────────┬──────────┘
                            │              │
                  ┌─────────▼───┐   ┌──────▼───────┐
                  │  Provisioner │   │  MCP Server   │
-                 │  (per-driver)│   │  (AI agents)  │
+                 │  (per-driver)│   │ (post-MVP,    │
+                 │              │   │  see §14)      │
                  └──────┬───────┘   └───────────────┘
                         │
-        ┌───────────────┼────────────────────┐
-        │               │                    │
- ┌──────▼─────┐  ┌──────▼─────┐       ┌──────▼─────┐
- │  Docker /   │  │ Kubernetes  │       │  Bare VM /  │
- │  Compose    │  │  (Helm)     │       │  systemd    │
- │  driver     │  │  driver     │       │  driver     │
- └──────┬─────┘  └──────┬─────┘       └──────┬─────┘
-        └───────────────┴────────────────────┘
+                 ┌──────▼─────┐
+                 │  Docker /   │   (Kubernetes / bare-VM drivers land later,
+                 │  Compose    │    same interface — see §12)
+                 │  driver     │
+                 └──────┬─────┘
                         │
               ┌─────────▼─────────┐
               │   Data Plane        │
@@ -102,8 +121,8 @@ Each engine is defined by one **service manifest** (see §8) — adding an engin
                         │
               ┌─────────▼─────────┐
               │  Gateway/Proxy      │
-              │  (TCP/TLS SNI +     │
-              │   HTTP routing)     │
+              │  (TCP passthrough +  │
+              │   HTTP routing)      │
               └─────────┬─────────┘
                         │
                  instance.alldb.io:PORT  (or path-based for HTTP admin UI)
@@ -111,13 +130,13 @@ Each engine is defined by one **service manifest** (see §8) — adding an engin
 
 **Components:**
 
-- **Control plane** — the only "always-on shared" thing. Owns org/user auth, instance metadata (which engine, which driver, which region, owner), billing (cloud only), and the reconciliation loop (desired state → actual state).
-- **Provisioner** — pluggable drivers so the same control plane can create instances via Docker Compose (single box, self-host default), Kubernetes (scale-out self-host / cloud), or a bare-VM/systemd driver (cheapest possible self-host, no container runtime required). Driver interface: `create(manifest, size) -> InstanceHandle`, `start/stop/delete`, `snapshot/restore`, `exec(cmd)`, `logs()`, `metrics()`.
-- **Service manifests** — one per engine, see §8. This is the extensibility point.
-- **Gateway** — a single ingress that routes `instance-id.alldb.io` (or `host:port` for raw TCP protocols like Postgres wire protocol) to the right container. TLS terminates here; SNI-based routing for TCP engines, hostname/path routing for HTTP-native engines (Mongo doesn't speak HTTP, so TCP passthrough + a dedicated port range, similar to how Fly.io/Render do managed Postgres).
-- **Data browser** — a separate stateless service that speaks each engine's protocol server-side (never in the browser) and exposes a normalized "list tables/collections/keys, run query, get schema" API to the web UI. This is what makes "one UI for every DB" possible without reinventing five different query languages in the frontend.
-- **MCP server** — wraps the same control-plane API as MCP tools: `create_database`, `list_databases`, `get_connection_info`, `run_query`, `delete_database`. This is the thing that makes an AI agent's life a single tool call.
-- **Connectors** — generated, per-instance: connection string, `.env` block, and framework-specific snippets (Prisma schema `datasource` block, SQLAlchemy URL, Mongoose URI, etc.) rendered from the manifest's connection-string template.
+- **Control plane** — the only "always-on shared" thing. Owns auth, instance metadata, and the reconciliation loop (desired state → actual state).
+- **Provisioner** — pluggable drivers. MVP ships **Docker only**; Kubernetes and bare-VM drivers land in Phase 2+ behind the same interface (`create(manifest, size) -> InstanceHandle`, `start/stop/delete`, `snapshot/restore`, `exec`, `logs`, `metrics`).
+- **Service manifests** — one per engine, see §8. The extensibility point, exercised for real starting in Phase 2.
+- **Gateway** — routes traffic to the right container; TCP passthrough for the wire protocol, TLS terminated at the edge.
+- **Data browser** — a stateless service that speaks the engine's protocol server-side and exposes a normalized "list tables, run query, get schema" API. This is the single most important component to get right — it's the actual product, not plumbing.
+- **MCP server** — post-MVP (§14), not part of the Phase 1 build.
+- **Connectors** — per-instance connection string, `.env` block, and framework snippets rendered from the manifest's template.
 
 ## 8. The service manifest (the extensibility contract)
 
@@ -151,36 +170,32 @@ resource_defaults:
   disk_gb: 1
 ```
 
-Adding a new engine = adding one manifest + implementing (or reusing) a data-browser adapter for it. No control-plane code changes required for the common case.
+Only one manifest (`postgres`) needs to exist for Phase 1. The format is designed for Phase 2 portability, but it doesn't need to prove itself until then.
 
 ## 9. Deployment modes
 
 | | alldb Cloud (managed) | Self-hosted OSS |
 |---|---|---|
 | Who runs the control plane | us | the business/dev, on their own infra |
-| Install | n/a, sign up | `docker compose up` (single box) or Helm chart (k8s) |
+| Install | n/a, sign up | `docker compose up` |
 | Data location | our cloud accounts | their own AWS/GCP/DO/bare metal |
-| License model | same OSS core + hosted convenience | Apache-2.0 / MIT core |
-| Support for "bring your own cloud" (cloud but self-managed instances) | v2: connect your AWS account, we orchestrate, data never leaves your account | n/a (already the default) |
+| License model | same OSS core + hosted convenience | Apache-2.0 core |
 
-Self-host installer targets, in priority order:
-1. `docker-compose.yml` — single VM, gets someone from zero to a running control plane + first database in under 5 minutes. This is the OSS credibility artifact; it needs to be flawless.
-2. Helm chart — for teams already on k8s who want alldb as an internal platform.
-3. One-line installer script (`curl | sh`) that wraps (1) for the "I just want it running" crowd.
+`docker-compose.yml` is the only self-host installer target for Phase 1 — single VM, zero to a running control plane + first Postgres instance in under 5 minutes. This is the OSS credibility artifact; it needs to be flawless before anything else gets built. Helm chart and one-line installer are Phase 2+.
 
 ## 10. Security & isolation
 
-- Each instance = its own container/pod with its own network namespace, resource limits (CPU/mem/disk quotas), and generated credentials (no shared root password across instances).
-- Secrets (root passwords, TLS keys) generated per-instance, stored in the control plane's secret store (encrypted at rest; pluggable backend — file/age for self-host default, Vault/KMS for cloud).
-- Network policy: instances cannot reach each other by default; only the gateway and the org that owns the instance can reach it.
-- TLS everywhere: gateway terminates TLS for HTTP admin traffic; TCP engines get TLS via the engine's native support where available (Postgres `sslmode=require`) plus network-level isolation as defense in depth.
-- Audit log of control-plane actions (create/delete/credential-rotate) from day one — this is what makes a business trust it enough to self-host in production.
+- Each instance = its own container with its own network namespace, resource limits, and generated credentials (no shared root password across instances).
+- Secrets generated per-instance, encrypted at rest (file/age for self-host default).
+- Network policy: instances cannot reach each other by default.
+- TLS: gateway terminates TLS for HTTP admin traffic; Postgres gets `sslmode=require` support.
+- Audit log of control-plane actions (create/delete/credential-rotate) from day one.
 
 ## 11. Backups, monitoring, scaling
 
-- **Backups**: scheduled snapshot per instance (driver-level volume snapshot where available, engine-level dump as universal fallback), retained N days, one-click restore to a new instance.
-- **Monitoring**: per-instance CPU/mem/disk/connection metrics surfaced in the UI (Prometheus-compatible `/metrics` from each driver); basic alerting (disk > 80%, instance down) via webhook/email.
-- **Scaling (v1)**: vertical only — resize CPU/mem/disk on an existing instance (stop, resize, restart). Horizontal scaling (read replicas, sharding) is explicitly Phase 3+ and engine-specific; don't block MVP on it.
+- **Backups**: scheduled `pg_dump` snapshot, retained N days, one-click restore to a new instance.
+- **Monitoring**: CPU/mem/disk/connection metrics in the advanced view.
+- **Scaling**: vertical only (resize CPU/mem/disk, stop/restart). Horizontal scaling is out of scope until an engine actually needs it.
 
 ## 12. Repo structure (proposed monorepo)
 
@@ -188,56 +203,73 @@ Self-host installer targets, in priority order:
 alldb/
   control-plane/        # API server, auth, scheduler, reconciliation loop
   drivers/
-    docker-compose/
-    kubernetes/
-    vm-systemd/
-  services/              # one dir per engine = the manifest + engine-specific scripts
-    postgres/
-    mysql/
-    mongodb/
-    redis/
+    docker-compose/     # MVP: the only driver that exists
+    kubernetes/          # Phase 2+
+    vm-systemd/          # Phase 2+
+  services/
+    postgres/            # MVP: the only manifest that exists
   data-browser/          # protocol adapters + normalized browse/query API
   gateway/               # TLS + TCP/HTTP routing
-  mcp-server/            # MCP tool definitions wrapping the control-plane API
-  web/                   # frontend (UI)
+  mcp-server/            # Phase 2+, not built for MVP
+  web/                   # frontend — simple view + advanced view
   cli/                   # `alldb` CLI
-  sdk/                   # generated client libs (JS/TS, Python, Go)
   deploy/
     docker-compose.yml   # the self-host quickstart
-    helm/
   docs/
 ```
 
-## 13. MVP scope (Phase 1 — "make the demo real")
+## 13. MVP scope (Phase 1 — prove the wedge, not the breadth)
 
-Goal: a stranger can `docker compose up`, open the UI, create a Postgres and a Redis instance, get URLs, browse data, and connect from a local script — in under 10 minutes, with zero docs beyond the README.
+Goal: a stranger can `docker compose up`, open the UI, create a Postgres instance, get a URL, and say **"this is the best database browsing/connecting experience I've used"** — for one engine, in under 5 minutes, with zero docs beyond the README. Breadth of engines proves nothing if the one engine isn't genuinely better than the alternatives.
 
-- [ ] Control plane: create/list/delete instance, auth (simple email+password or GitHub OAuth), single-node Docker driver only.
-- [ ] Service manifests: Postgres, MySQL, MongoDB, Redis.
-- [ ] Gateway: TCP passthrough with per-instance port allocation (skip fancy SNI routing for v1; simplest thing that works).
-- [ ] Data browser: table/collection/key listing + raw query runner for all four MVP engines.
-- [ ] Web UI: create flow, instance detail page (status, connection info, browse, connect snippets), delete.
-- [ ] CLI: `alldb create <engine>`, `alldb list`, `alldb rm`, `alldb url <id>`.
-- [ ] `docker-compose.yml` one-liner install for self-host.
-- [ ] Docs: README quickstart + "add a new engine" guide (proves the manifest pattern works before Phase 2 engines get added).
-- [ ] Explicitly deferred: Kubernetes driver, MCP server, billing/cloud multi-tenancy, backups automation, vertical resize UI. (Land right after MVP, in that order — MCP server especially, since it's a key differentiator.)
+- [ ] Control plane: create/list/delete instance, simple auth, Docker driver only.
+- [ ] One service manifest: Postgres.
+- [ ] Gateway: TCP passthrough, per-instance port allocation.
+- [ ] **Data browser** (the actual bet): table listing, schema view, query runner with real syntax highlighting/autocomplete, row browsing with sane pagination for large tables, CSV/JSON export. This gets disproportionate effort relative to everything else in the MVP.
+- [ ] Web UI: create flow; instance page with **simple view** (URL, `.env` snippet, browse button) and **advanced view** (config, resource graphs, logs, shell) on the same instance.
+- [ ] CLI: `alldb create postgres`, `alldb list`, `alldb rm`, `alldb url <id>`.
+- [ ] `docker-compose.yml` one-liner self-host install.
+- [ ] Docs: README quickstart.
+- [ ] **Explicitly deferred, not started until Phase 1 lands and gets real usage feedback**: any second engine, Kubernetes driver, MCP server, billing/cloud, backup automation. Multi-engine breadth is a Phase 2 decision made *after* seeing whether the Postgres-only experience actually lands — not a parallel workstream now.
 
 ## 14. Roadmap after MVP
 
-1. **MCP server + CLI polish** — this is the "AI agents use it directly" differentiator; ship it early, right after MVP.
-2. **Kubernetes driver** — unlocks real self-host-at-scale and is the basis for alldb Cloud's own backend.
-3. **alldb Cloud** — hosted control plane using the k8s driver; billing, org/team management, regions.
-4. **Backups & restore automation, resize UI, alerting.**
-5. **Phase 2 engines** (ClickHouse, OpenSearch, MinIO, vector DBs).
-6. **"Bring your own cloud"** — cloud-hosted control plane that provisions into the customer's own AWS/GCP account (best of both: managed UX, their data residency).
+1. **Phase 2 engines** (MySQL, MongoDB, Redis) — only once Postgres is proven, to validate the manifest pattern generalizes and the data-browser abstraction holds up across protocols.
+2. **MCP server** — wraps the control-plane API as MCP tools once there's a human-proven product underneath it. Explicitly not a launch feature (see §6.1) — it's how an already-good product becomes usable by agents too, not what makes the product good.
+3. **Kubernetes driver** — self-host-at-scale, and the basis for alldb Cloud's backend.
+4. **alldb Cloud** — hosted control plane; billing, org/team management, regions.
+5. **Backups & restore automation, resize UI, alerting, Phase 3/4 engines.**
+6. **"Bring your own cloud"** — cloud-hosted control plane provisioning into the customer's own account.
 
 ## 15. Open decisions (need a call before/while building)
 
-- **License**: Apache-2.0 vs MIT for the core (affects how comfortable businesses are self-hosting/forking). Recommendation: Apache-2.0 (patent grant, still fully permissive) — common choice for infra OSS aimed at business adoption.
-- **Control-plane language/stack**: needs to be picked before Phase 1 starts. Recommendation lens: Go (single static binary, great for a "download and run" OSS installer, strong Docker/k8s SDKs) vs. TypeScript/Node (faster iteration, one language across control-plane + web UI + MCP server). Given the audience (AI-assisted devs, fast iteration, MCP/web-first), leaning TypeScript/Node for the control plane + a thin Go CLI, but this is worth 30 minutes of explicit discussion, not a silent default.
-- **Multi-tenancy model for alldb Cloud pricing**: pure per-instance VM cost pass-through vs. bin-packing multiple small instances onto shared hosts (cheaper free tier, more ops complexity). Doesn't block OSS/self-host work; only matters once Cloud billing is designed.
-- **Naming/branding for the hosted product** vs. the OSS project (e.g. "alldb" OSS + "alldb Cloud" hosted, or a distinct cloud brand) — cosmetic, but pick it before the landing page gets built.
+- **License**: Apache-2.0 recommended (patent grant, still fully permissive, standard for infra OSS aimed at business adoption).
+- **Control-plane language/stack**: needs to be picked before Phase 1 starts. TypeScript/Node (one language across control-plane + web UI, faster iteration on the data-browser UI which is the actual bet) vs. Go (single static binary, simpler self-host installer story). Leaning TypeScript/Node given Phase 1 is UI-heavy, not infra-breadth-heavy — worth a real decision, not a silent default.
+- **Team/resourcing reality**: the honest assessment in §16 assumes this is a small/solo effort unless stated otherwise. If that's wrong, some of §16's scoring changes — worth confirming explicitly.
+- **Naming/branding for the hosted product** vs. the OSS project — cosmetic, pick before the landing page gets built.
+
+## 16. Honest go/no-go assessment
+
+Rated on the actual bar set: not "is this a reasonable plan" but "will this realistically become the tool developers and businesses across the world default to." Scored against six weighted dimensions, assuming a small/solo team and no confirmed distribution channel unless corrected in §15.
+
+| Dimension | Weight | Score /10 | Why |
+|---|---|---|---|
+| Problem validity | 15% | 8 | Real pain, proven by the size of the competitors solving pieces of it. Not a burning, actively-searched-for need on its own — an improvement on known alternatives, not a category creation. |
+| Differentiation / wedge strength | 20% | 6 | "Best-in-class data browser + progressive disclosure, database-only" is a real, currently unowned niche. But it's a UX bet, not a structural moat — a funded competitor could copy the winning ideas within a quarter of seeing traction. |
+| Execution difficulty vs. likely resources | 20% | 4 | Even scoped to one engine, "best-in-class" data browser + adaptive UI + production-grade security/backups is a multi-quarter build to do *well*, and this is infrastructure — reliability bugs are trust-destroying, not just annoying. Biggest honest risk on the list. |
+| Competitive timing / moat | 15% | 4 | Entering years after Coolify has 55k stars and community gravity, after Selfhost.dev already covers the AI-agent angle. Not first, not funded, no technical moat once the idea is visible. |
+| Distribution / community / marketing plan | 15% | 2 | Nothing in this plan yet addresses *how* it reaches the world — no launch strategy, no content engine, no growth loop. OSS projects blow up as much from distribution as from code quality; this dimension is currently unaddressed entirely. |
+| Technical soundness of the plan itself | 15% | 8 | Now well-scoped, focused, and internally consistent with the chosen wedge. |
+
+**Weighted score: ≈ 5.3 / 10.**
+
+That is below the 9 you set as the bar to proceed. Two honest things to say about that, not as a hedge but because both are true and you should have them before deciding:
+
+1. **The score is real, not sandbagged.** The weak dimensions (execution difficulty, moat, distribution) are weak because they depend on things this plan genuinely doesn't establish yet — team size, a launch plan, a reason a funded incumbent can't just copy the winning UI idea. Sharpening the product wedge (which we just did) moved differentiation and technical soundness up; it didn't and couldn't move execution/distribution/moat, because those aren't product questions.
+2. **A ">9/10 to proceed" bar, taken literally, is close to unattainable for *any* early-stage plan for an ambitious "become the global default" outcome** — Docker, Kubernetes, and Postgres itself didn't have knowably-9+/10 plans at inception; that outcome is driven by years of execution, community response, and timing luck that no document can score in advance. If the rule is meant literally, it will kill this idea and almost any other first-time OSS bet at the planning stage, before execution ever gets a chance to move the real numbers (distribution, moat, execution track record) — the only dimensions that can't be improved by writing a better plan.
+
+Given that, the real decision isn't "does the document score above 9" — it's whether you want to treat the weak dimensions (distribution plan, resourcing commitment, a concrete answer to "what happens when Coolify copies the good idea") as gating questions to answer *before* writing code, or whether you're willing to build the Phase 1 Postgres-only slice as a cheap way to generate the evidence (real usage, real reactions) that those dimensions can't get without it. I'd lean toward the second — build the smallest real version of the wedge and let actual usage answer the distribution/moat questions, rather than trying to plan your way to a 9 on a document.
 
 ---
 
-**Next step**: confirm the Phase 1 engine list and control-plane stack (§15), then scaffold `control-plane/`, `services/postgres/`, and `deploy/docker-compose.yml` as the first working slice — a single engine, end-to-end, before adding the other three MVP engines.
+**Next step**: your call per §16 — either treat this as a stop, or greenlight the Phase 1 Postgres-only slice (`control-plane/`, `services/postgres/`, `data-browser/`, `deploy/docker-compose.yml`) as the cheapest way to generate real evidence on the dimensions a plan document can't score.
