@@ -1,0 +1,35 @@
+services:
+  control-plane:
+    build:
+      context: ..
+      dockerfile: control-plane/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Where the control plane's OWN queries reach sibling database containers
+      # from inside its own container — the docker host gateway, not "localhost".
+      WHARF_PROBE_HOST: host.docker.internal
+      # Where connection strings shown to you point — the machine you're running
+      # `docker compose up` on. Change this if you're exposing Wharf elsewhere.
+      WHARF_PUBLIC_HOST: ${WHARF_PUBLIC_HOST:-localhost}
+      WHARF_TOKEN: ${WHARF_TOKEN:-}
+      WHARF_DATA_DIR: /data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - wharf-control-plane-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - control-plane
+    restart: unless-stopped
+
+volumes:
+  wharf-control-plane-data:

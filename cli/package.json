@@ -1,0 +1,12 @@
+{
+  "name": "@wharf/cli",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "wharf": "./bin/wharf.js"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
+}

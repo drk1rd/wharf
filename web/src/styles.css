@@ -1,0 +1,385 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --border: #262b35;
+  --text: #e7e9ee;
+  --muted: #8b93a3;
+  --accent: #4fb3ff;
+  --danger: #ff6161;
+  --ok: #34d399;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tagline {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+.create-row {
+  margin-bottom: 32px;
+}
+
+.engine-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.engine-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  cursor: pointer;
+  color: var(--text);
+  min-width: 160px;
+}
+
+.engine-card:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.engine-card:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.engine-name {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.engine-version {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.engine-cta {
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.instance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.instance-table th {
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.instance-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.row-link {
+  cursor: pointer;
+}
+
+.row-link:hover {
+  background: var(--panel);
+}
+
+.status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.status-running {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--ok);
+}
+
+.status-creating {
+  background: rgba(79, 179, 255, 0.15);
+  color: var(--accent);
+}
+
+.status-error {
+  background: rgba(255, 97, 97, 0.15);
+  color: var(--danger);
+}
+
+.status-stopped {
+  background: rgba(139, 147, 163, 0.15);
+  color: var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.banner.error {
+  background: rgba(255, 97, 97, 0.1);
+  color: var(--danger);
+  border: 1px solid rgba(255, 97, 97, 0.3);
+}
+
+.banner.info {
+  background: rgba(79, 179, 255, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(79, 179, 255, 0.3);
+}
+
+.instance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.instance-header h1 {
+  margin: 0 0 4px;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+button {
+  font: inherit;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.danger {
+  border-color: rgba(255, 97, 97, 0.4);
+  color: var(--danger);
+}
+
+button.active {
+  background: var(--accent);
+  color: #0b1420;
+  border-color: var(--accent);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.copy-field {
+  margin-bottom: 14px;
+}
+
+.copy-field label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.copy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copy-row code {
+  flex: 1;
+  background: #0b0d12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.browse-layout {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.object-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.object-list button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.result-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+
+.result-table th,
+.result-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.result-table th {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  text-align: left;
+}
+
+.query-runner textarea {
+  width: 100%;
+  background: #0b0d12;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.config-list {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  row-gap: 8px;
+  margin: 0;
+}
+
+.config-list dt {
+  color: var(--muted);
+}
+
+.config-list dd {
+  margin: 0;
+}
+
+.logs {
+  background: #0b0d12;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+}

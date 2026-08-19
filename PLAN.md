@@ -1,4 +1,4 @@
-# alldb — Plan
+# Wharf — Plan
 
 **The best possible place to spin up, look at, and connect to a database — nothing else.**
 Open source. Self-host it or use the managed cloud. Adapts to who's using it: a newbie gets a URL and a button; a senior engineer gets full config, logs, and shell access on the same instance.
@@ -11,30 +11,30 @@ Running a database today means picking a vendor per engine (RDS for Postgres, At
 
 Existing "one-click database" tools (see §6.1) treat databases as one feature among many (app hosting, static sites, cron jobs, 280 one-click templates). None of them treat *just the database* as the whole product — which means none of them have made the actual "look at my data" experience genuinely excellent. That gap is the opening.
 
-## 2. What alldb is
+## 2. What Wharf is
 
 A control plane + web UI + CLI + API that does **one job** — hosting and browsing databases — better than anything that does it as a side feature:
 
 1. Spins up a **single-tenant instance** of a database engine from a versioned reference definition.
 2. Hands back a **connection URL**, credentials, and a **best-in-class web-based data browser** immediately.
 3. Presents the same instance differently depending on who's looking: a **simple view** (URL, connect snippet, browse button) by default, and an **advanced view** (raw config, resource limits, logs, shell, replication/backup policy) one click away. Same object, same data — not two products.
-4. Works identically whether it's deployed on **alldb Cloud** (hosted by us) or **self-hosted** by a business on their own infrastructure — same OSS core either way.
+4. Works identically whether it's deployed on **Wharf Cloud** (hosted by us) or **self-hosted** by a business on their own infrastructure — same OSS core either way.
 
 We are deliberately *not* a general PaaS. No app hosting, no static sites, no cron jobs, no 280-template catalog. Databases only, done all the way.
 
 ## 3. Non-goals
 
 - Not a new database engine. We orchestrate existing ones (official images) — no forked storage engines.
-- Not a general app-hosting / PaaS platform (this is the line that separates alldb from Coolify/Railway/Elestio — see §6.1). If a feature request is "also deploy my app," the answer is no.
+- Not a general app-hosting / PaaS platform (this is the line that separates Wharf from Coolify/Railway/Elestio — see §6.1). If a feature request is "also deploy my app," the answer is no.
 - Not a horizontally-scaled multi-tenant shared cluster. Each instance is its own isolated process/container. Pooled/shared low-cost tiers are a later data-plane optimization, not a v1 requirement.
 - Not a BI/analytics tool. The data browser is for inspection and light querying, not dashboards.
 - **Not AI-agent-first at launch.** MCP/agent access is real (§14) but is not the thing that has to win people over first — the human experience does. See §6.1 on why racing to be "the AI-native one" isn't the wedge.
 
 ## 4. Core principles
 
-- **One command, one URL.** `alldb create postgres` (or a UI click) → running instance → connection string. No YAML required to get started.
+- **One command, one URL.** `wharf create postgres` (or a UI click) → running instance → connection string. No YAML required to get started.
 - **Progressive disclosure, not two products.** Every instance has exactly one simple view and one advanced view. The simple view is the default and hides everything except connect + browse. The advanced view reveals the same instance's full config, logs, resource limits, and shell — nothing is duplicated or diverges; "advanced" is just more of the same object visible. This is the concrete mechanism behind "adapts to whoever's using it," not a vague aspiration.
-- **The data browser is the product, not a bolted-on Adminer link.** If someone opens alldb just to look at their data — with no intention of ever using the browse-and-connect flow — it should still be the best tool they've used for that, per engine.
+- **The data browser is the product, not a bolted-on Adminer link.** If someone opens Wharf just to look at their data — with no intention of ever using the browse-and-connect flow — it should still be the best tool they've used for that, per engine.
 - **Reference services, not magic.** Every engine is a documented, versioned "service definition" (image + config + health check + backup/restore scripts + connection-string template). Anyone can read it, fork it, or add a new engine by writing one.
 - **Self-host = full product, not a crippled tier.** The OSS control plane does everything the hosted cloud does. This is the credibility bar for the OSS/dev community.
 - **Production-grade by default.** Backups, TLS, resource limits, and restart policies are not opt-in add-ons — they're what "create an instance" does.
@@ -53,7 +53,7 @@ We are deliberately *not* a general PaaS. No app hosting, no static sites, no cr
 
 **Business, self-hosting:**
 1. `docker compose up` on their own infra.
-2. Same UI/API as alldb Cloud, their own AWS/GCP/DO account or bare metal.
+2. Same UI/API as Wharf Cloud, their own AWS/GCP/DO account or bare metal.
 3. Their engineers get one internal portal for every database their org runs.
 
 **AI agent (post-MVP, §14):**
@@ -63,16 +63,16 @@ We are deliberately *not* a general PaaS. No app hosting, no static sites, no cr
 
 ## 6. Supported engines
 
-Depth before breadth. Ship **one engine done exceptionally well**, prove the wedge, then expand via the reference-manifest pattern.
+Depth before breadth. Ship **a small number of engines done exceptionally well**, prove the wedge, then expand via the reference-manifest pattern.
 
 | Phase | Engines |
 |---|---|
-| MVP (Phase 1) | **PostgreSQL only** — the whole simple/advanced UI, the whole data-browser experience, built and polished against one engine first |
-| Phase 2 | MySQL/MariaDB, MongoDB, Redis/Valkey — prove the manifest pattern generalizes |
+| MVP (Phase 1) | **PostgreSQL and MongoDB** — the whole simple/advanced UI, the whole data-browser experience, built and polished against a relational and a document engine so the manifest/adapter pattern is proven on two genuinely different protocols, not just parameterized SQL twice |
+| Phase 2 | MySQL/MariaDB, Redis/Valkey |
 | Phase 3 | ClickHouse, Elasticsearch/OpenSearch, MinIO, SQLite (ephemeral/dev) |
 | Phase 4 | Vector DBs (Qdrant, Weaviate), Neo4j |
 
-Each engine is defined by one **service manifest** (see §8) — adding an engine should be a PR that adds one manifest + a data-browser adapter, not a change to the control plane. But manifest-portability is a Phase 2 proof point, not a Phase 1 goal — Phase 1's only goal is "is the Postgres experience good enough that people talk about it."
+Each engine is defined by one **service manifest** (see §8) — adding an engine should be a PR that adds one manifest + a data-browser adapter, not a change to the control plane. Phase 1's goal is "is the Postgres/Mongo experience good enough that people talk about it" — breadth beyond these two is explicitly a later, evidence-gated decision (see §16).
 
 ### 6.1 Competitive reality (why this scope, honestly)
 
@@ -83,7 +83,7 @@ This space is not empty:
 - **Selfhost.dev** already ships 150+ MCP tools for provisioning/managing databases from Claude/Cursor — the "AI-agent-native" angle is not an open door, it's contested.
 - **Railway** sets the UX bar for "click → URL → done" (not open source, not self-hostable).
 
-None of them make the *database itself* — browsing it, understanding it, working with it day to day — the whole product with a UI that scales from total beginner to power user on the same instance. That gap, not breadth of engines or being first with an MCP server, is what alldb is betting on. Racing incumbents on breadth (more engines, more compliance certs, more infra options) is a losing game for a new, smaller entrant — racing them on depth of one experience is not.
+None of them make the *database itself* — browsing it, understanding it, working with it day to day — the whole product with a UI that scales from total beginner to power user on the same instance. That gap, not breadth of engines or being first with an MCP server, is what Wharf is betting on. Racing incumbents on breadth (more engines, more compliance certs, more infra options) is a losing game for a new, smaller entrant — racing them on depth of one experience is not.
 
 ## 7. Architecture
 
@@ -125,7 +125,7 @@ None of them make the *database itself* — browsing it, understanding it, worki
               │   HTTP routing)      │
               └─────────┬─────────┘
                         │
-                 instance.alldb.io:PORT  (or path-based for HTTP admin UI)
+                 instance.wharf.dev:PORT  (or path-based for HTTP admin UI)
 ```
 
 **Components:**
@@ -174,7 +174,7 @@ Only one manifest (`postgres`) needs to exist for Phase 1. The format is designe
 
 ## 9. Deployment modes
 
-| | alldb Cloud (managed) | Self-hosted OSS |
+| | Wharf Cloud (managed) | Self-hosted OSS |
 |---|---|---|
 | Who runs the control plane | us | the business/dev, on their own infra |
 | Install | n/a, sign up | `docker compose up` |
@@ -197,47 +197,51 @@ Only one manifest (`postgres`) needs to exist for Phase 1. The format is designe
 - **Monitoring**: CPU/mem/disk/connection metrics in the advanced view.
 - **Scaling**: vertical only (resize CPU/mem/disk, stop/restart). Horizontal scaling is out of scope until an engine actually needs it.
 
-## 12. Repo structure (proposed monorepo)
+## 12. Repo structure (as built)
 
 ```
-alldb/
-  control-plane/        # API server, auth, scheduler, reconciliation loop
-  drivers/
-    docker-compose/     # MVP: the only driver that exists
-    kubernetes/          # Phase 2+
-    vm-systemd/          # Phase 2+
-  services/
-    postgres/            # MVP: the only manifest that exists
-  data-browser/          # protocol adapters + normalized browse/query API
-  gateway/               # TLS + TCP/HTTP routing
-  mcp-server/            # Phase 2+, not built for MVP
-  web/                   # frontend — simple view + advanced view
-  cli/                   # `alldb` CLI
-  deploy/
-    docker-compose.yml   # the self-host quickstart
-  docs/
+control-plane/           # Express + TypeScript API
+  src/
+    manifests/            # postgres.ts, mongodb.ts, registry.ts — the extensibility contract
+    browser/              # postgres.ts, mongodb.ts adapters — list/browse/query, normalized
+    docker.ts              # provisioner: create/stop/stats/logs/exec via dockerode
+    instances.ts            # orchestration: create/delete/connection-string logic
+    backups.ts               # dump/restore via docker exec, binary-safe
+    db.ts                     # SQLite metadata store (instances, backups)
+    routes/                    # instances.ts, browse.ts — the REST API
+web/                      # React + Vite UI — Simple/Advanced instance views
+cli/                      # `wharf` CLI (create/list/rm/url)
+deploy/
+  docker-compose.yml      # self-host quickstart
+PLAN.md
+README.md
 ```
+
+No separate gateway service or pluggable-driver abstraction yet — ports are published directly by Docker and the provisioner talks to the Docker daemon directly. Both are real §7/§9 ideas for when a second driver (Kubernetes) or real multi-tenant routing is actually needed; building them before that need exists would have been speculative.
 
 ## 13. MVP scope (Phase 1 — prove the wedge, not the breadth)
 
-Goal: a stranger can `docker compose up`, open the UI, create a Postgres instance, get a URL, and say **"this is the best database browsing/connecting experience I've used"** — for one engine, in under 5 minutes, with zero docs beyond the README. Breadth of engines proves nothing if the one engine isn't genuinely better than the alternatives.
+Goal: a stranger can `docker compose up`, open the UI, create a Postgres or MongoDB instance, get a URL, and say **"this is the best database browsing/connecting experience I've used"** — in under 5 minutes, with zero docs beyond the README.
 
-- [ ] Control plane: create/list/delete instance, simple auth, Docker driver only.
-- [ ] One service manifest: Postgres.
-- [ ] Gateway: TCP passthrough, per-instance port allocation.
-- [ ] **Data browser** (the actual bet): table listing, schema view, query runner with real syntax highlighting/autocomplete, row browsing with sane pagination for large tables, CSV/JSON export. This gets disproportionate effort relative to everything else in the MVP.
-- [ ] Web UI: create flow; instance page with **simple view** (URL, `.env` snippet, browse button) and **advanced view** (config, resource graphs, logs, shell) on the same instance.
-- [ ] CLI: `alldb create postgres`, `alldb list`, `alldb rm`, `alldb url <id>`.
-- [ ] `docker-compose.yml` one-liner self-host install.
-- [ ] Docs: README quickstart.
-- [ ] **Explicitly deferred, not started until Phase 1 lands and gets real usage feedback**: any second engine, Kubernetes driver, MCP server, billing/cloud, backup automation. Multi-engine breadth is a Phase 2 decision made *after* seeing whether the Postgres-only experience actually lands — not a parallel workstream now.
+- [x] Control plane: create/list/delete instance, optional shared-token auth, Docker driver.
+- [x] Service manifests: Postgres, MongoDB.
+- [x] Per-instance port publishing (no dedicated gateway yet — see §12).
+- [x] **Data browser**: table/collection listing with row-count estimates, row browsing with pagination, a query runner (raw SQL for Postgres; structured JSON filter for Mongo — deliberately no `$where`/eval, so it can't become remote code execution against the container).
+- [x] Web UI: create flow; instance page with **Simple view** (URL, `.env` snippet, browse + query panel) and **Advanced view** (live CPU/mem/net/disk metrics, config, logs, backups) on the same instance.
+- [x] CLI: `wharf create <engine>`, `wharf list`, `wharf rm`, `wharf url <id>`.
+- [x] `docker-compose.yml` self-host install (with the host-gateway networking fix needed for the control plane to reach sibling containers from inside its own container).
+- [x] Backup/restore (`pg_dump`/`mongodump` via `docker exec`, binary-safe) — beyond the original MVP checklist, included because it was cheap given the exec plumbing backups already needed.
+- [ ] README quickstart — written; **not yet run end-to-end on a machine with a live Docker daemon** (this build environment has the Docker CLI but no daemon — see status note below).
+- [ ] **Still deferred**: syntax highlighting/autocomplete in the query runner, CSV/JSON export, Kubernetes driver, MCP server, billing/cloud, multi-user auth. Not started until Phase 1 gets real usage feedback.
+
+**Honest status**: all of the above was built and type-checked/unit-smoke-tested against the real Express app and SQLite store in this session. The Docker provisioning path (actually creating a Postgres/Mongo container, waiting for it to become healthy, connecting to it, browsing real data) is implemented but **has not been exercised against a live Docker daemon** — this sandbox has the `docker` CLI but no running daemon. First thing to do with a real Docker host: `cd deploy && docker compose up --build`, create one of each engine, and fix whatever that surfaces — there will be something, first runs against a real daemon always find something a daemon-less environment can't.
 
 ## 14. Roadmap after MVP
 
-1. **Phase 2 engines** (MySQL, MongoDB, Redis) — only once Postgres is proven, to validate the manifest pattern generalizes and the data-browser abstraction holds up across protocols.
+1. **Phase 2 engines** (MySQL, Redis) — once Postgres/Mongo are proven, to validate the manifest pattern generalizes further.
 2. **MCP server** — wraps the control-plane API as MCP tools once there's a human-proven product underneath it. Explicitly not a launch feature (see §6.1) — it's how an already-good product becomes usable by agents too, not what makes the product good.
-3. **Kubernetes driver** — self-host-at-scale, and the basis for alldb Cloud's backend.
-4. **alldb Cloud** — hosted control plane; billing, org/team management, regions.
+3. **Kubernetes driver** — self-host-at-scale, and the basis for Wharf Cloud's backend.
+4. **Wharf Cloud** — hosted control plane; billing, org/team management, regions.
 5. **Backups & restore automation, resize UI, alerting, Phase 3/4 engines.**
 6. **"Bring your own cloud"** — cloud-hosted control plane provisioning into the customer's own account.
 
@@ -272,4 +276,4 @@ Given that, the real decision isn't "does the document score above 9" — it's w
 
 ---
 
-**Next step**: your call per §16 — either treat this as a stop, or greenlight the Phase 1 Postgres-only slice (`control-plane/`, `services/postgres/`, `data-browser/`, `deploy/docker-compose.yml`) as the cheapest way to generate real evidence on the dimensions a plan document can't score.
+**Next step (decided)**: greenlit — build the Phase 1 slice as the cheapest way to generate real evidence. As of this commit, the Postgres + MongoDB slice described in §12–13 is built (control plane, both manifests and browser adapters, web UI with Simple/Advanced views, CLI, backups, docker-compose quickstart) and type-checked, but **not yet run against a live Docker daemon** — do that first on a real machine (`cd deploy && docker compose up --build`), fix whatever a real first run surfaces, then get it in front of actual people. The distribution and moat questions in §16 only get answered by that next step, not by more planning.
