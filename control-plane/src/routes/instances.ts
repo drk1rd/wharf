@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { instancesRepo } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
 import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
@@ -7,6 +7,16 @@ import { backupSupported, createBackup, listBackups, restoreBackup } from "../ba
 import { ownerIdFor } from "../auth.js";
 
 export const instancesRouter = Router();
+
+/** Every route below catches its own errors locally rather than falling through to app.ts's global handler — so this is the only place an unexpected (5xx) failure gets logged server-side. Without it, a bug here is invisible outside of the JSON body the client happens to print. */
+function respondError(res: Response, err: unknown): void {
+  const status = (err as Error & { status?: number }).status ?? 500;
+  if (status >= 500) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+  }
+  res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+}
 
 function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
   if (!row) return null;
@@ -67,8 +77,7 @@ instancesRouter.get("/instances/:id", (req, res) => {
     const row = requireOwnedInstance(req.params.id, req.auth!);
     res.json(publicInstance(row));
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -77,8 +86,7 @@ instancesRouter.delete("/instances/:id", async (req, res) => {
     await deleteInstance(req.params.id, req.auth!);
     res.status(204).end();
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -96,8 +104,7 @@ instancesRouter.patch("/instances/:id/resize", async (req, res) => {
     const row = await resizeInstance(req.params.id, req.auth!, { cpu, memoryMb });
     res.json(publicInstance(row));
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -107,8 +114,7 @@ instancesRouter.get("/instances/:id/metrics", async (req, res) => {
     const stats = await getContainerStats(row.container_id as string);
     res.json(stats);
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -119,8 +125,7 @@ instancesRouter.get("/instances/:id/logs", async (req, res) => {
     const text = await getContainerLogs(row.container_id as string, Number.isFinite(tail) ? tail : 300);
     res.type("text/plain").send(text);
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -130,8 +135,7 @@ instancesRouter.post("/instances/:id/backups", async (req, res) => {
     const backup = await createBackup(row);
     res.status(201).json(backup);
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -140,8 +144,7 @@ instancesRouter.get("/instances/:id/backups", (req, res) => {
     requireOwnedInstance(req.params.id, req.auth!);
     res.json(listBackups(req.params.id));
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });
 
@@ -156,7 +159,6 @@ instancesRouter.post("/instances/:id/restore", async (req, res) => {
     await restoreBackup(row, backupId);
     res.status(204).end();
   } catch (err) {
-    const status = (err as Error & { status?: number }).status ?? 500;
-    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+    respondError(res, err);
   }
 });

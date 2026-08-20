@@ -60,7 +60,7 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   assert.ok(backup.body.size_bytes > 0);
 
   const del = await client.delete(`/api/instances/${instance.id}`);
-  assert.equal(del.status, 204);
+  assert.equal(del.status, 204, `delete should return 204 (got ${del.status}: ${JSON.stringify(del.body)})`);
 });
 
 test("mysql: create, connect, browse, query, backup", { skip, timeout: 150_000 }, async () => {
