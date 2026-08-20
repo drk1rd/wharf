@@ -5,6 +5,7 @@ import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
 import { createInstanceContainer, stopAndRemoveContainer, updateContainerResources, waitForPort } from "./docker.js";
 import { canAccessInstance, type AuthContext } from "./auth.js";
 import { getBrowserAdapter } from "./browser/registry.js";
+import { deleteBackupsForInstance } from "./backups.js";
 
 // The host used in connection strings handed to users/clients — wherever the
 // docker daemon's published ports are actually reachable from (typically the
@@ -152,6 +153,7 @@ export async function deleteInstance(id: string, auth: AuthContext): Promise<boo
   if (row.container_id) {
     await stopAndRemoveContainer(row.container_id, row.volume_name ?? undefined);
   }
+  await deleteBackupsForInstance(id);
   instancesRepo.remove(id);
   return true;
 }

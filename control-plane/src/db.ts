@@ -190,4 +190,7 @@ export const backupsRepo = {
   get(id: string): BackupRow | undefined {
     return db.prepare(`SELECT * FROM backups WHERE id = ?`).get(id) as BackupRow | undefined;
   },
+  removeForInstance(instanceId: string) {
+    db.prepare(`DELETE FROM backups WHERE instance_id = ?`).run(instanceId);
+  },
 };

@@ -72,6 +72,18 @@ export function listBackups(instanceId: string): BackupRow[] {
   return backupsRepo.listForInstance(instanceId);
 }
 
+/**
+ * `backups.instance_id` has a foreign key on `instances.id` with no cascade
+ * (found for real in CI: every instance delete 500'd with a FOREIGN KEY
+ * constraint failure the moment a backup existed for it), so a backup's
+ * file and DB row must both go before the instance row can be removed.
+ */
+export async function deleteBackupsForInstance(instanceId: string): Promise<void> {
+  const backups = backupsRepo.listForInstance(instanceId);
+  await Promise.all(backups.map((b) => fs.rm(b.file_path, { force: true })));
+  backupsRepo.removeForInstance(instanceId);
+}
+
 export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
