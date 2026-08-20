@@ -85,6 +85,15 @@ This space is not empty:
 
 None of them make the *database itself* — browsing it, understanding it, working with it day to day — the whole product with a UI that scales from total beginner to power user on the same instance. That gap, not breadth of engines or being first with an MCP server, is what Wharf is betting on. Racing incumbents on breadth (more engines, more compliance certs, more infra options) is a losing game for a new, smaller entrant — racing them on depth of one experience is not.
 
+### 6.2 Ask your data (natural-language queries) — feature, not the wedge
+
+The instinct "make text-to-SQL obsolete via something MCP-like" is worth separating into two different things, because they have very different value:
+
+- **An MCP server that lets any AI agent (Claude, Cursor, ...) talk to a Wharf instance** doesn't make Wharf the inventor of natural-language database querying — any MCP client already does that translation itself once it can see a schema and run a query. Neon, Supabase, and Selfhost.dev (§6.1) already ship this. It's good hygiene, not a differentiator, which is why it stays a Phase 2+ roadmap item (§14), not something built to be the headline.
+- **An in-app "ask your data a question in plain English" box**, built directly into the Simple view, is different: it works for someone who never opens an AI coding tool at all, which fits "adapts to whoever's using it" better than an agent integration does. It's also cheap to build on top of what already exists — the query runner and schema-listing endpoints did almost all the work.
+
+So this shipped as the second kind: a plain-English input in the Simple view that calls Claude with the instance's schema, gets back a single query (a read-only `SELECT` for Postgres; a structured `{collection, filter}` for Mongo — never raw code execution against the container either way), runs it through the same `runQuery` path the manual query runner uses, and shows the result. It's gated on `ANTHROPIC_API_KEY` being set on the control plane, off by default for self-hosters who haven't configured it, with a visible hint rather than a hidden feature. Don't market it as "obsoletes text-to-SQL" — several competitors already have some version of natural-language query access; market it as "you don't have to know SQL to ask your database a question."
+
 ## 7. Architecture
 
 ```
@@ -231,10 +240,16 @@ Goal: a stranger can `docker compose up`, open the UI, create a Postgres or Mong
 - [x] CLI: `wharf create <engine>`, `wharf list`, `wharf rm`, `wharf url <id>`.
 - [x] `docker-compose.yml` self-host install (with the host-gateway networking fix needed for the control plane to reach sibling containers from inside its own container).
 - [x] Backup/restore (`pg_dump`/`mongodump` via `docker exec`, binary-safe) — beyond the original MVP checklist, included because it was cheap given the exec plumbing backups already needed.
+- [x] **Ask your data** (natural-language query, beyond the original MVP checklist — see §6.2): a plain-English question box in the Simple view, gated on `ANTHROPIC_API_KEY` being set. Not "text-to-SQL as a headline feature" per §6.1's reasoning — it's a small addition on top of the query runner that already existed, aimed at the person who doesn't want to learn SQL/Mongo query syntax at all.
 - [ ] README quickstart — written; **not yet run end-to-end on a machine with a live Docker daemon** (this build environment has the Docker CLI but no daemon — see status note below).
 - [ ] **Still deferred**: syntax highlighting/autocomplete in the query runner, CSV/JSON export, Kubernetes driver, MCP server, billing/cloud, multi-user auth. Not started until Phase 1 gets real usage feedback.
 
-**Honest status**: all of the above was built and type-checked/unit-smoke-tested against the real Express app and SQLite store in this session. The Docker provisioning path (actually creating a Postgres/Mongo container, waiting for it to become healthy, connecting to it, browsing real data) is implemented but **has not been exercised against a live Docker daemon** — this sandbox has the `docker` CLI but no running daemon. First thing to do with a real Docker host: `cd deploy && docker compose up --build`, create one of each engine, and fix whatever that surfaces — there will be something, first runs against a real daemon always find something a daemon-less environment can't.
+**Honest status**: all of the above was built and type-checked/unit-smoke-tested against the real Express app and SQLite store in this session. Two things specifically have not been exercised against the real, live systems they depend on:
+
+1. **Docker provisioning** — creating a real Postgres/Mongo container, waiting for it to become healthy, connecting to it, browsing real data. This sandbox has the `docker` CLI but no running daemon.
+2. **The "ask your data" Claude API call** — the request shape (strict tool use, forced `tool_choice`, the read-only-SQL / structured-Mongo-filter safety checks on the response) is written against the current `@anthropic-ai/sdk` and type-checks against it, and the feature's on/off gating and error surfacing were verified live (config endpoint, disabled-state UI, and the downstream error path when the target database isn't reachable). What's *not* verified is a real round trip to the Anthropic API — this sandbox has no `ANTHROPIC_API_KEY` configured.
+
+First thing to do with a real Docker host and a real API key: `cd deploy && docker compose up --build`, create one of each engine, set `ANTHROPIC_API_KEY`, and ask it a real question — fix whatever that surfaces. First runs against real external systems always find something a sandbox without them can't.
 
 ## 14. Roadmap after MVP
 

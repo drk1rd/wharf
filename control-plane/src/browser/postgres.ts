@@ -56,4 +56,26 @@ export const postgresAdapter: BrowserAdapter = {
       return { columns: res.fields?.map((f) => f.name) ?? [], rows: res.rows, rowCount: res.rowCount ?? res.rows.length };
     });
   },
+
+  async getSchemaContext(connectionString): Promise<string> {
+    return withClient(connectionString, async (client) => {
+      const res = await client.query<{ table_schema: string; table_name: string; column_name: string; data_type: string }>(
+        `SELECT table_schema, table_name, column_name, data_type
+         FROM information_schema.columns
+         WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+         ORDER BY table_schema, table_name, ordinal_position
+         LIMIT 2000`
+      );
+      const byTable = new Map<string, string[]>();
+      for (const row of res.rows) {
+        const key = `${row.table_schema}.${row.table_name}`;
+        if (!byTable.has(key)) byTable.set(key, []);
+        byTable.get(key)!.push(`${row.column_name} ${row.data_type}`);
+      }
+      const lines = [...byTable.entries()]
+        .slice(0, 60)
+        .map(([table, cols]) => `${table}(${cols.slice(0, 40).join(", ")})`);
+      return lines.length > 0 ? lines.join("\n") : "(no tables found)";
+    });
+  },
 };

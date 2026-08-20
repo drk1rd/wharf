@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type BrowseObject, type ContainerStats, type Instance, type QueryResult } from "../lib/api";
+import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -99,8 +99,72 @@ function SimpleView({ instance }: { instance: Instance }) {
   return (
     <div className="simple-view">
       <ConnectPanel instance={instance} />
+      <AskPanel instance={instance} />
       <BrowsePanel instance={instance} />
     </div>
+  );
+}
+
+function AskPanel({ instance }: { instance: Instance }) {
+  const toast = useToast();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [answer, setAnswer] = useState<AskResult | null>(null);
+
+  useEffect(() => {
+    api
+      .getConfig()
+      .then((c) => setEnabled(c.askEnabled))
+      .catch(() => setEnabled(false));
+  }, []);
+
+  async function handleAsk() {
+    if (!question.trim() || asking) return;
+    setAsking(true);
+    setAnswer(null);
+    try {
+      setAnswer(await api.ask(instance.id, question));
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setAsking(false);
+    }
+  }
+
+  if (enabled === null) return null;
+
+  return (
+    <section className="panel">
+      <h2>Ask your data</h2>
+      {!enabled ? (
+        <p className="empty">
+          Set <code>ANTHROPIC_API_KEY</code> on the control plane to ask questions in plain English instead of writing queries by hand.
+        </p>
+      ) : (
+        <>
+          <div className="ask-row">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+              placeholder="e.g. how many rows were added in the last 7 days?"
+            />
+            <button className="primary" onClick={handleAsk} disabled={asking || !question.trim()}>
+              {asking ? <span className="spinner" /> : "Ask"}
+            </button>
+          </div>
+          {answer && (
+            <div className="ask-answer">
+              <p className="ask-explanation">{answer.explanation}</p>
+              <code className="ask-query">{answer.query}</code>
+              <ResultTable result={answer.result} />
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

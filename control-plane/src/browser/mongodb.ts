@@ -61,4 +61,40 @@ export const mongodbAdapter: BrowserAdapter = {
       return { rows: docs, rowCount: docs.length };
     });
   },
+
+  /** MongoDB is schemaless, so this samples a few documents per collection to infer field shapes. */
+  async getSchemaContext(connectionString): Promise<string> {
+    return withClient(connectionString, async (client) => {
+      const db = client.db();
+      const collections = await db.listCollections().toArray();
+      const lines: string[] = [];
+      for (const col of collections.slice(0, 40)) {
+        const sample = await db.collection(col.name).find({}).limit(3).toArray();
+        const fieldTypes = new Map<string, string>();
+        for (const doc of sample) {
+          for (const [key, value] of Object.entries(doc)) {
+            if (!fieldTypes.has(key)) fieldTypes.set(key, bsonTypeName(value));
+          }
+        }
+        const fields = [...fieldTypes.entries()]
+          .slice(0, 30)
+          .map(([key, type]) => `${key}: ${type}`)
+          .join(", ");
+        lines.push(`${col.name}: {${fields}}`);
+      }
+      return lines.length > 0 ? lines.join("\n") : "(no collections found)";
+    });
+  },
 };
+
+function bsonTypeName(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  if (value instanceof Date) return "Date";
+  if (typeof value === "object") {
+    const ctorName = (value as { _bsontype?: string }).constructor?.name;
+    if (ctorName === "ObjectId" || ctorName === "ObjectID") return "ObjectId";
+    return ctorName ?? "object";
+  }
+  return typeof value;
+}

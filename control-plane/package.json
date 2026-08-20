@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "better-sqlite3": "^11.5.0",
     "cors": "^2.8.5",
     "dockerode": "^4.0.2",

@@ -4,12 +4,17 @@ import cors from "cors";
 import { requireAuth } from "./auth.js";
 import { instancesRouter } from "./routes/instances.js";
 import { browseRouter } from "./routes/browse.js";
+import { askEnabled } from "./ask.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
+
+app.get("/api/config", requireAuth, (_req, res) => {
+  res.json({ askEnabled: askEnabled() });
+});
 
 app.use("/api", requireAuth, instancesRouter);
 app.use("/api", requireAuth, browseRouter);

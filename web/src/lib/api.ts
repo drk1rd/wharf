@@ -69,7 +69,14 @@ export interface Backup {
   created_at: string;
 }
 
+export interface AskResult {
+  query: string;
+  explanation: string;
+  result: QueryResult;
+}
+
 export const api = {
+  getConfig: () => request<{ askEnabled: boolean }>("/config"),
   listEngines: () => request<Engine[]>("/engines"),
   listInstances: () => request<Instance[]>("/instances"),
   getInstance: (id: string) => request<Instance>(`/instances/${id}`),
@@ -90,4 +97,6 @@ export const api = {
   createBackup: (id: string) => request<Backup>(`/instances/${id}/backups`, { method: "POST" }),
   restoreBackup: (id: string, backupId: string) =>
     request<void>(`/instances/${id}/restore`, { method: "POST", body: JSON.stringify({ backupId }) }),
+  ask: (id: string, question: string) =>
+    request<AskResult>(`/instances/${id}/ask`, { method: "POST", body: JSON.stringify({ question }) }),
 };

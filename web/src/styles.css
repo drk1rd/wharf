@@ -592,6 +592,48 @@ button.ghost {
   resize: vertical;
 }
 
+.ask-row {
+  display: flex;
+  gap: 8px;
+}
+
+.ask-row input[type="text"] {
+  flex: 1;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.ask-answer {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.ask-explanation {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.ask-query {
+  display: block;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
 .query-runner textarea:focus,
 button:focus-visible,
 input:focus-visible {

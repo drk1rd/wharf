@@ -22,4 +22,6 @@ export interface BrowserAdapter {
   ): Promise<QueryResult>;
   /** Postgres: raw SQL. MongoDB: { collection, filter } encoded as JSON string. */
   runQuery(connectionString: string, query: string): Promise<QueryResult>;
+  /** Compact plain-text schema summary, used as LLM context for natural-language queries. */
+  getSchemaContext(connectionString: string): Promise<string>;
 }

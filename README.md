@@ -24,6 +24,8 @@ Open the UI, click a database engine to create an instance, and within ~10–30 
 
 By default the API is **unauthenticated** — fine for local/dev use on a machine you trust. Before exposing this to a network, set `WHARF_TOKEN` (see `deploy/docker-compose.yml`) and pass the same value as the `x-wharf-token` header / `WHARF_API_URL`+`WHARF_TOKEN` env vars to the CLI.
 
+To enable **Ask your data** (ask a database question in plain English instead of writing SQL/Mongo queries by hand), set `ANTHROPIC_API_KEY` on the control plane. It's off by default — the UI shows a hint instead of the input box until it's configured. `WHARF_ASK_MODEL` overrides the model (default: Anthropic's current recommended model).
+
 ## Local development (without Docker Compose)
 
 Run the control plane directly against your local Docker daemon:
