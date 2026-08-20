@@ -27,25 +27,37 @@ function parseConnection(connectionString: string): ConnParts {
   };
 }
 
+// Only SELECT-shaped statements produce tabular output ClickHouse can wrap in
+// FORMAT JSON. Appending it to DDL/DML (CREATE TABLE, INSERT ... VALUES, ...)
+// either errors outright or silently conflicts with inline VALUES data —
+// found for real in CI, where an INSERT immediately followed by a SELECT
+// came back empty because the FORMAT JSON tacked onto the INSERT broke it.
+const READ_QUERY_RE = /^\s*(SELECT|WITH|SHOW|DESCRIBE|DESC|EXISTS|EXPLAIN)\b/i;
+
 /** POSTs a query to ClickHouse's HTTP interface and parses the FORMAT JSON envelope. */
 async function query(connectionString: string, sql: string): Promise<{ columns: string[]; rows: unknown[] }> {
   const { origin, user, password, database } = parseConnection(connectionString);
   const url = `${origin}/?database=${encodeURIComponent(database)}&user=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}`;
   const trimmed = sql.trim().replace(/;+\s*$/, "");
   const hasFormat = /\bFORMAT\s+\w+\s*$/i.test(trimmed);
-  const body = hasFormat ? trimmed : `${trimmed} FORMAT JSON`;
+  const isRead = READ_QUERY_RE.test(trimmed);
+  const body = hasFormat || !isRead ? trimmed : `${trimmed} FORMAT JSON`;
 
   const res = await fetch(url, { method: "POST", body });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`ClickHouse error (${res.status}): ${text.slice(0, 500)}`);
   }
-  if (!hasFormat) {
-    const parsed = JSON.parse(text) as { meta?: { name: string }[]; data?: unknown[] };
-    return { columns: (parsed.meta ?? []).map((m) => m.name), rows: parsed.data ?? [] };
+  if (hasFormat) {
+    // Caller supplied their own FORMAT (e.g. JSONEachRow for dumpAll) — hand back raw text as a single row.
+    return { columns: [], rows: [text] };
   }
-  // Caller supplied their own FORMAT (e.g. JSONEachRow for dumpAll) — hand back raw text as a single row.
-  return { columns: [], rows: [text] };
+  if (!isRead || !text.trim()) {
+    // DDL/DML has no tabular output to parse.
+    return { columns: [], rows: [] };
+  }
+  const parsed = JSON.parse(text) as { meta?: { name: string }[]; data?: unknown[] };
+  return { columns: (parsed.meta ?? []).map((m) => m.name), rows: parsed.data ?? [] };
 }
 
 export const clickhouseAdapter: BrowserAdapter = {

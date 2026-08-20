@@ -3,6 +3,12 @@ import type { BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
 
 async function withClient<T>(connectionString: string, fn: (client: ReturnType<typeof createClient>) => Promise<T>): Promise<T> {
   const client = createClient({ url: connectionString, socket: { connectTimeout: 8000 } });
+  // Same reasoning as postgres.ts's withClient: node-redis's client is an
+  // EventEmitter that throws on an unhandled "error" (e.g. "Socket closed
+  // unexpectedly" while Redis itself is still starting up, which the
+  // caller's readiness-retry loop runs into directly) — without a listener
+  // that crashes the process instead of just failing this call.
+  client.on("error", () => undefined);
   await client.connect();
   try {
     return await fn(client);

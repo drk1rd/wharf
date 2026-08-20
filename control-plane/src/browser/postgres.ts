@@ -13,6 +13,14 @@ export function quoteIdent(ident: string): string {
 
 async function withClient<T>(connectionString: string, fn: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString, connectionTimeoutMillis: 8000 });
+  // node-postgres's Client is an EventEmitter — if the server closes the
+  // socket unexpectedly (e.g. Postgres's own initdb-then-restart cycle,
+  // which the caller's readiness-retry loop deliberately runs into), it
+  // emits "error" asynchronously. With zero listeners, Node's default
+  // EventEmitter behavior is to throw, crashing the whole process instead of
+  // just failing this one call — the real failure already surfaces through
+  // the rejected connect()/query() promise below.
+  client.on("error", () => undefined);
   await client.connect();
   try {
     return await fn(client);
