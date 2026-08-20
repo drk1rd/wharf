@@ -12,6 +12,7 @@
     "dev:control-plane": "npm run dev --workspace control-plane",
     "dev:web": "npm run dev --workspace web",
     "build": "npm run build --workspace control-plane && npm run build --workspace web",
-    "typecheck": "npm run typecheck --workspace control-plane && npm run typecheck --workspace web"
+    "typecheck": "npm run typecheck --workspace control-plane && npm run typecheck --workspace web",
+    "test": "npm run test --workspace control-plane"
   }
 }

@@ -12,7 +12,7 @@ async function withClient<T>(connectionString: string, fn: (client: ReturnType<t
 }
 
 /** Splits a command line into argv, respecting "double" and 'single' quoted segments. */
-function tokenize(commandLine: string): string[] {
+export function tokenize(commandLine: string): string[] {
   const tokens: string[] = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
   let match: RegExpExecArray | null;

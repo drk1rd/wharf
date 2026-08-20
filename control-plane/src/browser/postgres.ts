@@ -4,7 +4,7 @@ import type { BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Safely quotes a Postgres identifier that isn't allowed to be parameterized. */
-function quoteIdent(ident: string): string {
+export function quoteIdent(ident: string): string {
   if (!IDENT_RE.test(ident)) {
     throw new Error(`invalid identifier: ${ident}`);
   }
