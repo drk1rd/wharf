@@ -335,6 +335,20 @@ This section originally scoped the pilot around one shared `WHARF_TOKEN` and exp
 
 **What I can build right now, safely and reversibly**: the instance-count cap (shipped), and the accounts/OpenRouter work above (shipped). What's left in "must-do" — picking where this actually runs, setting real secrets, inviting people — is a decision or an action on your infrastructure, not code.
 
+### 17b. Adoption/appeal pass — closing the obvious gaps, not chasing more polish
+
+Asked separately: "how do we make this easy to adopt, appeal more." Worth splitting into what's a real, checkable gap versus what's cosmetic, because it's easy to spend a lot of time on the second and call it the first.
+
+**Shipped, unambiguous, no decision needed:**
+- **A `LICENSE` file.** There wasn't one — a from-scratch check of the repo root confirmed it, this wasn't a guess. A missing license is a hard stop for a lot of serious adopters (businesses in particular, exactly who §2 targets) before they read a single line of code; Apache-2.0, matching the recommendation §15 already made months ago but never actually added. Zero downside to fixing this immediately.
+- **README leads with the actual product now**, not just prose about it — real screenshots (`docs/screenshots/`, captured from a running instance this session, not mockups) at the top, before the reader has to decide whether to keep reading. GitHub's own browsing/discovery flow is almost entirely visual triage in the first few seconds; a wall of text at the top of a README is a real, measurable drop-off point.
+
+**Real levers, but need your call — not something to silently build:**
+- **Prebuilt Docker images** (published to GHCR or Docker Hub) so `docker compose up` pulls instead of building from source — meaningfully cuts time-to-first-instance for a new adopter, and removes "do I have the right Node toolchain" as a failure mode. Needs a registry namespace and either manual publishing or a CI workflow with package-write permission — your call on where, and whether to wire up the GitHub Action now or once the pilot's given real signal it's worth the upkeep.
+- **A one-line installer script** (`curl | sh` wrapping the compose file) — nice, but only worth it once the prebuilt-images question above is settled; a one-liner that still does a multi-minute local build isn't actually the win it looks like.
+
+**Not doing, and saying so plainly**: none of this — a nicer README, a license file, faster pulls — is a substitute for §17's actual pilot. A repo that's easier to *try* isn't the same claim as a product people *want*; only real usage tells you the second thing, and that's still the one open, unresolved question this whole document keeps coming back to (§16's distribution score, §17's original point, this section's own framing). Polish compounds the effect of real usage once it exists; it doesn't create it.
+
 ---
 
-**Next step (decided)**: the evidence-generating slice from §16 is built and verified on real hardware; §17 is the punch list for the next real step — a small, safety-gated pilot, not another build cycle. Add the instance cap, pick where it runs (tunnel from your machine is the recommended default), set a real token, and invite people.
+**Next step (decided)**: the evidence-generating slice from §16 is built and verified on real hardware; §17 is the punch list for the next real step — a small, safety-gated pilot, not another build cycle. Add the instance cap, pick where it runs (tunnel from your machine is the recommended default), set a real token, and invite people. §17b's adoption fixes make that pilot (and whatever comes after it) easier to hand to someone — they don't replace it.
