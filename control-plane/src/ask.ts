@@ -1,43 +1,64 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-// Operators can point this at a different model for cost/latency reasons; the
-// default follows Anthropic's current guidance (use the strongest model unless
-// told otherwise) rather than picking a "cheap enough" model ourselves.
-// `||` (not `??`) deliberately: an empty string (e.g. an unset compose env var
-// that still gets passed through as "") must fall back too, not become the model id.
-const MODEL = process.env.WHARF_ASK_MODEL || "claude-opus-5";
-
-let client: Anthropic | null = null;
-function getClient(): Anthropic {
-  if (!client) client = new Anthropic();
-  return client;
-}
+// Ask-your-data runs through OpenRouter rather than calling Anthropic directly,
+// so the operator (and, per-user, via defaultModel) can pick from OpenRouter's
+// full model catalog instead of being locked to one provider.
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_BASE = "https://openrouter.ai/api/v1";
 
 export function askEnabled(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return Boolean(OPENROUTER_API_KEY);
 }
+
+export interface OpenRouterModel {
+  id: string;
+  name?: string;
+  contextLength?: number;
+}
+
+let modelsCache: { fetchedAt: number; models: OpenRouterModel[] } | null = null;
+const MODELS_CACHE_MS = 10 * 60 * 1000;
+
+export async function listModels(): Promise<OpenRouterModel[]> {
+  if (!OPENROUTER_API_KEY) return [];
+  if (modelsCache && Date.now() - modelsCache.fetchedAt < MODELS_CACHE_MS) {
+    return modelsCache.models;
+  }
+  const res = await fetch(`${OPENROUTER_BASE}/models`, {
+    headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+  });
+  if (!res.ok) {
+    throw new Error(`failed to list models from OpenRouter (${res.status})`);
+  }
+  const body = (await res.json()) as { data?: { id: string; name?: string; context_length?: number }[] };
+  const models = (body.data ?? [])
+    .map((m) => ({ id: m.id, name: m.name, contextLength: m.context_length }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  modelsCache = { fetchedAt: Date.now(), models };
+  return models;
+}
+
+export type AskableEngine = "postgres" | "mysql" | "mongodb";
 
 export interface GeneratedQuery {
   query: string;
   explanation: string;
 }
 
-const GENERATE_QUERY_TOOL: Anthropic.Tool = {
-  name: "generate_query",
-  description: "Return the generated database query and a one-sentence plain-English explanation of what it does.",
-  strict: true,
-  input_schema: {
-    type: "object",
-    properties: {
-      query: { type: "string" },
-      explanation: { type: "string" },
+const GENERATE_QUERY_TOOL = {
+  type: "function",
+  function: {
+    name: "generate_query",
+    description: "Return the generated database query and a one-sentence plain-English explanation of what it does.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        explanation: { type: "string" },
+      },
+      required: ["query", "explanation"],
+      additionalProperties: false,
     },
-    required: ["query", "explanation"],
-    additionalProperties: false,
   },
-};
-
-export type AskableEngine = "postgres" | "mysql" | "mongodb";
+} as const;
 
 const SQL_DIALECT_NAME: Record<"postgres" | "mysql", string> = {
   postgres: "PostgreSQL",
@@ -61,24 +82,62 @@ function systemPromptFor(engine: AskableEngine, schemaContext: string): string {
 }
 
 export async function generateQuery(
+  model: string,
   engine: AskableEngine,
   schemaContext: string,
   question: string
 ): Promise<GeneratedQuery> {
-  const response = await getClient().messages.create({
-    model: MODEL,
-    max_tokens: 4096,
-    system: systemPromptFor(engine, schemaContext),
-    messages: [{ role: "user", content: question }],
-    tools: [GENERATE_QUERY_TOOL],
-    tool_choice: { type: "tool", name: "generate_query" },
+  if (!OPENROUTER_API_KEY) {
+    throw new Error("OPENROUTER_API_KEY is not set on the control plane");
+  }
+  if (!model) {
+    throw new Error("no model selected — pick one in Settings or pass one explicitly");
+  }
+
+  const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPromptFor(engine, schemaContext) },
+        { role: "user", content: question },
+      ],
+      tools: [GENERATE_QUERY_TOOL],
+      tool_choice: { type: "function", function: { name: "generate_query" } },
+    }),
   });
 
-  const toolUse = response.content.find((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
-  if (!toolUse) {
-    throw new Error("the model did not return a query — try rephrasing the question");
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OpenRouter request failed (${res.status}): ${text.slice(0, 300)}`);
   }
-  const input = toolUse.input as { query: string; explanation: string };
+
+  const body = (await res.json()) as {
+    choices?: { message?: { tool_calls?: { function?: { arguments?: string } }[] } }[];
+    error?: { message?: string };
+  };
+  if (body.error) {
+    throw new Error(body.error.message ?? "OpenRouter returned an error");
+  }
+
+  const argsJson = body.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (!argsJson) {
+    throw new Error("the model did not return a query — try rephrasing the question, or pick a different model");
+  }
+
+  let input: { query?: unknown; explanation?: unknown };
+  try {
+    input = JSON.parse(argsJson);
+  } catch {
+    throw new Error("the model returned malformed JSON — try a different model");
+  }
+  if (typeof input.query !== "string" || typeof input.explanation !== "string") {
+    throw new Error("the model's response was missing query/explanation");
+  }
 
   if (engine === "postgres" || engine === "mysql") {
     const normalized = input.query.trim().replace(/;+\s*$/, "");

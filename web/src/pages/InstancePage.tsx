@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type QueryResult } from "../lib/api";
+import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
+import { useAuth } from "../components/AuthProvider";
 
 type Tab = "simple" | "advanced";
 
@@ -145,7 +146,10 @@ function SimpleView({ instance }: { instance: Instance }) {
 
 function AskPanel({ instance }: { instance: Instance }) {
   const toast = useToast();
+  const { user } = useAuth();
   const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [model, setModel] = useState("");
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [answer, setAnswer] = useState<AskResult | null>(null);
@@ -157,12 +161,23 @@ function AskPanel({ instance }: { instance: Instance }) {
       .catch(() => setEnabled(false));
   }, []);
 
+  useEffect(() => {
+    if (!enabled) return;
+    api
+      .listModels()
+      .then((list) => {
+        setModels(list);
+        setModel((current) => current || user?.defaultModel || list[0]?.id || "");
+      })
+      .catch(() => setModels([]));
+  }, [enabled, user?.defaultModel]);
+
   async function handleAsk() {
-    if (!question.trim() || asking) return;
+    if (!question.trim() || !model || asking) return;
     setAsking(true);
     setAnswer(null);
     try {
-      setAnswer(await api.ask(instance.id, question));
+      setAnswer(await api.ask(instance.id, question, model));
     } catch (err) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
@@ -180,10 +195,22 @@ function AskPanel({ instance }: { instance: Instance }) {
         <p className="empty">Not available for key-value stores yet — a single generated command doesn't map cleanly to an arbitrary question.</p>
       ) : !enabled ? (
         <p className="empty">
-          Set <code>ANTHROPIC_API_KEY</code> on the control plane to ask questions in plain English instead of writing queries by hand.
+          Set <code>OPENROUTER_API_KEY</code> on the control plane to ask questions in plain English instead of writing queries by hand.
         </p>
       ) : (
         <>
+          {models.length > 0 && (
+            <div className="copy-field">
+              <label>Model</label>
+              <select className="model-select-inline" value={model} onChange={(e) => setModel(e.target.value)}>
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="ask-row">
             <input
               type="text"
@@ -192,7 +219,7 @@ function AskPanel({ instance }: { instance: Instance }) {
               onKeyDown={(e) => e.key === "Enter" && handleAsk()}
               placeholder="e.g. how many rows were added in the last 7 days?"
             />
-            <button className="primary" onClick={handleAsk} disabled={asking || !question.trim()}>
+            <button className="primary" onClick={handleAsk} disabled={asking || !question.trim() || !model}>
               {asking ? <span className="spinner" /> : "Ask"}
             </button>
           </div>

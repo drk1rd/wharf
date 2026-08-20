@@ -3,6 +3,7 @@ import { instancesRepo, type InstanceRow } from "./db.js";
 import { getManifest } from "./manifests/registry.js";
 import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
 import { createInstanceContainer, stopAndRemoveContainer, waitForPort } from "./docker.js";
+import { canAccessInstance, type AuthContext } from "./auth.js";
 
 // The host used in connection strings handed to users/clients — wherever the
 // docker daemon's published ports are actually reachable from (typically the
@@ -45,7 +46,18 @@ export function internalConnectionString(row: InstanceRow): string | null {
   return manifest.connectionString(secrets, PROBE_HOST, row.host_port);
 }
 
-export async function createInstance(name: string, engine: string, version?: string): Promise<InstanceRow> {
+// Protects a shared host (e.g. a small pilot everyone points at) from one
+// person spinning up far more instances than the box can hold. 0 or unset
+// disables the cap — fine for a single-user local/dev setup.
+const MAX_INSTANCES = Number(process.env.WHARF_MAX_INSTANCES ?? 0);
+
+export async function createInstance(name: string, engine: string, ownerId: string | null, version?: string): Promise<InstanceRow> {
+  if (MAX_INSTANCES > 0 && instancesRepo.list().length >= MAX_INSTANCES) {
+    const err = new Error(`this Wharf instance is at its limit of ${MAX_INSTANCES} databases — delete one before creating another`);
+    (err as Error & { status?: number }).status = 429;
+    throw err;
+  }
+
   const manifest = getManifest(engine);
   if (!manifest) throw new Error(`unknown engine: ${engine}`);
   const resolvedVersion = version && manifest.versions.includes(version) ? version : manifest.defaultVersion;
@@ -54,6 +66,7 @@ export async function createInstance(name: string, engine: string, version?: str
   const secrets = manifest.makeSecrets(id);
   const row: InstanceRow = {
     id,
+    owner_id: ownerId,
     name,
     engine,
     version: resolvedVersion,
@@ -99,9 +112,8 @@ async function provision(id: string, manifest: ServiceManifest, version: string,
   }
 }
 
-export async function deleteInstance(id: string): Promise<boolean> {
-  const row = instancesRepo.get(id);
-  if (!row) return false;
+export async function deleteInstance(id: string, auth: AuthContext): Promise<boolean> {
+  const row = requireOwnedInstance(id, auth);
   if (row.container_id) {
     await stopAndRemoveContainer(row.container_id, row.volume_name ?? undefined);
   }
@@ -109,13 +121,21 @@ export async function deleteInstance(id: string): Promise<boolean> {
   return true;
 }
 
-export function requireRunningInstance(id: string): InstanceRow {
+function notFound(): never {
+  const err = new Error("instance not found");
+  (err as Error & { status?: number }).status = 404;
+  throw err;
+}
+
+/** Fetches an instance and checks the caller is allowed to see it — 404 either way, so existence isn't leaked to someone who doesn't own it. */
+export function requireOwnedInstance(id: string, auth: AuthContext): InstanceRow {
   const row = instancesRepo.get(id);
-  if (!row) {
-    const err = new Error("instance not found");
-    (err as Error & { status?: number }).status = 404;
-    throw err;
-  }
+  if (!row || !canAccessInstance(row, auth)) notFound();
+  return row;
+}
+
+export function requireRunningInstance(id: string, auth: AuthContext): InstanceRow {
+  const row = requireOwnedInstance(id, auth);
   if (row.status !== "running" || !row.container_id) {
     const err = new Error(`instance is not running (status: ${row.status})`);
     (err as Error & { status?: number }).status = 409;

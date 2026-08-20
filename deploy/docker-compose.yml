@@ -14,10 +14,17 @@ services:
       WHARF_PUBLIC_HOST: ${WHARF_PUBLIC_HOST:-localhost}
       WHARF_TOKEN: ${WHARF_TOKEN:-}
       WHARF_DATA_DIR: /data
-      # Optional: enables the "ask your data" natural-language query feature.
-      # Leave unset to keep it off — the UI shows a hint instead of the input box.
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      WHARF_ASK_MODEL: ${WHARF_ASK_MODEL:-}
+      # Optional: caps how many instances this control plane will create in
+      # total — protects a shared host (e.g. a pilot everyone points at) from
+      # one person exhausting it. 0 or unset = no cap.
+      WHARF_MAX_INSTANCES: ${WHARF_MAX_INSTANCES:-0}
+      # Optional: enables the "ask your data" natural-language query feature via
+      # OpenRouter (https://openrouter.ai), letting each user pick their own model
+      # in Settings. Leave unset to keep it off — the UI shows a hint instead.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Set to "true" once Wharf is served over HTTPS (e.g. behind a tunnel) so
+      # session cookies get the Secure flag. Leave false for plain-HTTP local use.
+      WHARF_COOKIE_SECURE: ${WHARF_COOKIE_SECURE:-false}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

@@ -92,7 +92,7 @@ The instinct "make text-to-SQL obsolete via something MCP-like" is worth separat
 - **An MCP server that lets any AI agent (Claude, Cursor, ...) talk to a Wharf instance** doesn't make Wharf the inventor of natural-language database querying — any MCP client already does that translation itself once it can see a schema and run a query. Neon, Supabase, and Selfhost.dev (§6.1) already ship this. It's good hygiene, not a differentiator, which is why it stays a Phase 2+ roadmap item (§14), not something built to be the headline.
 - **An in-app "ask your data a question in plain English" box**, built directly into the Simple view, is different: it works for someone who never opens an AI coding tool at all, which fits "adapts to whoever's using it" better than an agent integration does. It's also cheap to build on top of what already exists — the query runner and schema-listing endpoints did almost all the work.
 
-So this shipped as the second kind: a plain-English input in the Simple view that calls Claude with the instance's schema, gets back a single query (a read-only `SELECT` for Postgres; a structured `{collection, filter}` for Mongo — never raw code execution against the container either way), runs it through the same `runQuery` path the manual query runner uses, and shows the result. It's gated on `ANTHROPIC_API_KEY` being set on the control plane, off by default for self-hosters who haven't configured it, with a visible hint rather than a hidden feature. Don't market it as "obsoletes text-to-SQL" — several competitors already have some version of natural-language query access; market it as "you don't have to know SQL to ask your database a question."
+So this shipped as the second kind: a plain-English input in the Simple view that calls a model with the instance's schema, gets back a single query (a read-only `SELECT` for Postgres/MySQL; a structured `{collection, filter}` for Mongo — never raw code execution against the container either way), runs it through the same `runQuery` path the manual query runner uses, and shows the result. It's gated on `OPENROUTER_API_KEY` being set on the control plane (see §17a for why OpenRouter rather than a single hardcoded provider), off by default for self-hosters who haven't configured it, with a visible hint rather than a hidden feature. Don't market it as "obsoletes text-to-SQL" — several competitors already have some version of natural-language query access; market it as "you don't have to know SQL to ask your database a question."
 
 ### 6.2a What Phase 2 (MySQL + Redis) actually proved
 
@@ -203,10 +203,9 @@ Only one manifest (`postgres`) needs to exist for Phase 1. The format is designe
 ## 10. Security & isolation
 
 - Each instance = its own container with its own network namespace, resource limits, and generated credentials (no shared root password across instances).
-- Secrets generated per-instance, encrypted at rest (file/age for self-host default).
+- **As built** (see §17a): real accounts (scrypt-hashed passwords, httpOnly session cookies) with per-instance ownership, plus an admin/service token (`WHARF_TOKEN`) for the CLI. Auth is off only in the single-user bootstrap window before either a token is set or the first account signs up.
+- Secrets generated per-instance. Not yet built: encryption at rest for the SQLite store, TLS termination at a gateway (self-host today relies on whatever's in front of it — a tunnel, a reverse proxy you add), an audit log of control-plane actions. These remain real gaps, not solved problems — don't read the presence of accounts as "the security model is done."
 - Network policy: instances cannot reach each other by default.
-- TLS: gateway terminates TLS for HTTP admin traffic; Postgres gets `sslmode=require` support.
-- Audit log of control-plane actions (create/delete/credential-rotate) from day one.
 
 ## 11. Backups, monitoring, scaling
 
@@ -221,14 +220,16 @@ control-plane/           # Express + TypeScript API
   src/
     manifests/            # postgres.ts, mongodb.ts, mysql.ts, redis.ts, registry.ts — the extensibility contract
     browser/              # matching adapters — list/browse/query/schema-context, normalized
-    ask.ts                 # Claude-powered natural-language query generation
-    docker.ts              # provisioner: create/stop/stats/logs/exec via dockerode
-    instances.ts            # orchestration: create/delete/connection-string logic
-    backups.ts               # dump/restore via docker exec, binary-safe, optional per-engine
-    db.ts                     # SQLite metadata store (instances, backups)
-    routes/                    # instances.ts, browse.ts — the REST API
-web/                      # React + Vite UI — Simple/Advanced instance views
-cli/                      # `wharf` CLI (create/list/rm/url)
+    ask.ts                 # OpenRouter-backed natural-language query generation, live model list
+    auth.ts                 # sessions, admin-token bypass, the bootstrap-window rule (§17a)
+    users.ts                  # password hashing/verification (scrypt), validation
+    docker.ts                  # provisioner: create/stop/stats/logs/exec via dockerode
+    instances.ts                # orchestration: create/delete/connection-string/ownership logic
+    backups.ts                   # dump/restore via docker exec, binary-safe, optional per-engine
+    db.ts                         # SQLite metadata store (users, sessions, instances, backups)
+    routes/                        # auth.ts, instances.ts, browse.ts — the REST API
+web/                      # React + Vite UI — accounts, Settings, Simple/Advanced instance views
+cli/                      # `wharf` CLI (create/list/rm/url), authenticates via WHARF_TOKEN
 deploy/
   docker-compose.yml      # self-host quickstart
 PLAN.md
@@ -299,6 +300,41 @@ That is below the 9 you set as the bar to proceed. Two honest things to say abou
 
 Given that, the real decision isn't "does the document score above 9" — it's whether you want to treat the weak dimensions (distribution plan, resourcing commitment, a concrete answer to "what happens when Coolify copies the good idea") as gating questions to answer *before* writing code, or whether you're willing to build the Phase 1 Postgres-only slice as a cheap way to generate the evidence (real usage, real reactions) that those dimensions can't get without it. I'd lean toward the second — build the smallest real version of the wedge and let actual usage answer the distribution/moat questions, rather than trying to plan your way to a 9 on a document.
 
+## 17. Pilot readiness plan
+
+The evidence-generating step §16 called for is now built and confirmed working on real hardware (Postgres, MongoDB, MySQL, Redis — create, connect, browse, query, ask-your-data, backups). The next step isn't more engines — it's getting a handful of real people to actually use it. "Furnished enough for that" is a much smaller bar than "production launch," and it's worth being explicit about the difference so this doesn't quietly turn into another round of building instead of shipping.
+
+**Scope**: 3–10 people you know (mix of the "newbie/vibe-coder" and "senior engineer" personas from §5, not just other developers who'll be polite), for a short window (days, not an open-ended beta), on a shared instance you control. Not a public launch — no HN/Product Hunt post, no anonymous signups. That comes later, if this round says it should.
+
+**Must-do before inviting anyone** (safety, not polish):
+
+1. **Set a real `WHARF_TOKEN`.** It's optional today and the docs already warn it's dev-only — that warning becomes load-bearing the moment anyone outside you can reach the URL. Non-negotiable, not a nice-to-have.
+2. **Cap the number of instances a shared pilot can create.** Nothing today stops one curious tester from spinning up 30 databases and exhausting the host. This is a real gap on a shared box, worth closing before strangers (even friendly ones) touch it — see below, this one I can build now.
+3. **Say the trust model out loud to testers**: it's one shared token, everyone sees everyone's instances, don't put real/sensitive data in it. Simpler than building per-user isolation for a 3–10 person pilot, but only safe if testers actually know that going in.
+
+**Where it runs — needs your call, not something I can do from here:**
+
+- **Fastest**: `docker compose up --build` on a machine you already have (your laptop, a spare box), exposed to testers via a tunnel (Cloudflare Tunnel or `ngrok http 5173`) instead of standing up new cloud infra. Zero new spend, reversible in one command, matches "smallest real thing" — my default recommendation for a pilot this size.
+- **Alternative**: a small VPS (Hetzner/DigitalOcean/similar) if you want it reachable without your machine staying on. I can walk through the setup, but provisioning it and paying for it is yours to do — I don't have a cloud account or payment method to do that on your behalf.
+- Either way: real domain optional, a raw IP or tunnel URL is fine for a pilot.
+
+**Deliberately not doing for this round** (would be building for a launch that isn't happening yet):
+
+- A formal onboarding flow / product tour — the UI is self-explanatory enough from a one-line "click an engine, then look at Simple vs Advanced" from whoever sends the invite. Building a tour for 5 people is premature.
+- An in-app feedback widget — just ask people directly (DM, call, whatever you'd use anyway). Simpler and gets better signal than a form nobody fills in.
+- Org/team accounts, billing — Kubernetes driver, Wharf Cloud, MCP server (§14) — none of them make the pilot better; they're answers to problems this pilot hasn't confirmed exist yet.
+
+### 17a. What shipped instead of the shared-token plan above
+
+This section originally scoped the pilot around one shared `WHARF_TOKEN` and explicitly deferred multi-user auth as out of scope at this size. That call got revisited mid-build on direct instruction: real accounts, a Settings page, and — separately — swapping ask-your-data from a hardcoded Anthropic call to OpenRouter with a live, per-user model picker. Both landed, and both are now real, not aspirational:
+
+- **Accounts replace the shared token as the default.** Signup/login/sessions (scrypt-hashed passwords, httpOnly session cookies), with each instance owned by the account that created it — an account only sees its own instances plus anything created before any account existed. `WHARF_TOKEN` didn't go away; it's now specifically the admin/service-account path (what the CLI uses, and a deliberate full-visibility bypass for the operator), not the only auth mechanism. This is a strictly better fit for the pilot than the original plan: testers no longer see each other's instances by default, and the "say the trust model out loud" must-do above is largely moot for anyone who signs up for their own account.
+- **A bootstrap window, not a flag to remember to flip.** Auth is off (single-user local/dev, matching the original pre-accounts behavior) exactly until either `WHARF_TOKEN` is set or the first account signs up — at that instant, every other request needs a real session or the admin token. No separate "now enable auth" step to forget.
+- **Ask-your-data moved off Anthropic onto OpenRouter**, on explicit instruction, with a per-user model picker (Settings, or inline per question) populated live from OpenRouter's `/models` endpoint rather than a hardcoded list — model catalogs move fast enough that a baked-in list would go stale. `OPENROUTER_API_KEY` replaces `ANTHROPIC_API_KEY`; the safety checks that mattered (read-only `SELECT` enforcement, structured-filter-only for Mongo) carried over unchanged, since they're about what the generated query is allowed to do, not which provider generated it.
+- **Verified live**, same standard as everything else in this document: the full signup → auth-required-flips → login-screen-appears → real-form-login → per-user instance isolation → 404-not-403-on-someone-else's-instance chain was exercised against a running control plane (curl for the API-level isolation checks, Playwright for the actual UI flow — bootstrap dashboard, login screen, post-login dashboard with the account's email in the topbar, Settings page). What's *not* verified: a real OpenRouter API call (no key available in any session so far — same category of gap as the earlier Anthropic-key gap it replaces) and the model catalog fetch/filter against OpenRouter's real, current response shape (the code defends against the shapes I'm confident about, but I haven't fetched the live endpoint).
+
+**What I can build right now, safely and reversibly**: the instance-count cap (shipped), and the accounts/OpenRouter work above (shipped). What's left in "must-do" — picking where this actually runs, setting real secrets, inviting people — is a decision or an action on your infrastructure, not code.
+
 ---
 
-**Next step (decided)**: greenlit — build the Phase 1 slice as the cheapest way to generate real evidence. As of this commit, the Postgres + MongoDB slice described in §12–13 is built (control plane, both manifests and browser adapters, web UI with Simple/Advanced views, CLI, backups, docker-compose quickstart) and type-checked, but **not yet run against a live Docker daemon** — do that first on a real machine (`cd deploy && docker compose up --build`), fix whatever a real first run surfaces, then get it in front of actual people. The distribution and moat questions in §16 only get answered by that next step, not by more planning.
+**Next step (decided)**: the evidence-generating slice from §16 is built and verified on real hardware; §17 is the punch list for the next real step — a small, safety-gated pilot, not another build cycle. Add the instance cap, pick where it runs (tunnel from your machine is the recommended default), set a real token, and invite people.

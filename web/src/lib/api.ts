@@ -4,6 +4,7 @@ const TOKEN = import.meta.env.VITE_WHARF_TOKEN as string | undefined;
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       "content-type": "application/json",
       ...(TOKEN ? { "x-wharf-token": TOKEN } : {}),
@@ -12,7 +13,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error ?? `request failed: ${res.status}`);
+    const err = new Error(body.error ?? `request failed: ${res.status}`) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   const contentType = res.headers.get("content-type") ?? "";
@@ -74,10 +77,33 @@ export interface AskResult {
   query: string;
   explanation: string;
   result: QueryResult;
+  model: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  defaultModel: string | null;
+}
+
+export interface OpenRouterModel {
+  id: string;
+  name?: string;
+  contextLength?: number;
 }
 
 export const api = {
-  getConfig: () => request<{ askEnabled: boolean }>("/config"),
+  getConfig: () => request<{ askEnabled: boolean; authRequired: boolean }>("/config"),
+  signup: (email: string, password: string) =>
+    request<User>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
+  login: (email: string, password: string) =>
+    request<User>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  logout: () => request<void>("/auth/logout", { method: "POST" }),
+  me: () => request<User>("/auth/me"),
+  updateSettings: (patch: { defaultModel?: string }) =>
+    request<User>("/auth/me", { method: "PATCH", body: JSON.stringify(patch) }),
+  listModels: () => request<OpenRouterModel[]>("/models"),
+
   listEngines: () => request<Engine[]>("/engines"),
   listInstances: () => request<Instance[]>("/instances"),
   getInstance: (id: string) => request<Instance>(`/instances/${id}`),
@@ -98,6 +124,6 @@ export const api = {
   createBackup: (id: string) => request<Backup>(`/instances/${id}/backups`, { method: "POST" }),
   restoreBackup: (id: string, backupId: string) =>
     request<void>(`/instances/${id}/restore`, { method: "POST", body: JSON.stringify({ backupId }) }),
-  ask: (id: string, question: string) =>
-    request<AskResult>(`/instances/${id}/ask`, { method: "POST", body: JSON.stringify({ question }) }),
+  ask: (id: string, question: string, model?: string) =>
+    request<AskResult>(`/instances/${id}/ask`, { method: "POST", body: JSON.stringify({ question, model }) }),
 };

@@ -818,3 +818,122 @@ input:focus-visible {
   gap: 8px;
   margin-top: 20px;
 }
+
+.topbar-email {
+  color: var(--muted);
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--accent);
+  margin-bottom: 20px;
+}
+
+.auth-card h1 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.auth-sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.auth-card form label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+
+.auth-card form input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.auth-switch {
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.model-filter {
+  display: block;
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  font: inherit;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.model-select {
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.model-select option {
+  padding: 4px 6px;
+}
+
+.model-select-inline {
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
