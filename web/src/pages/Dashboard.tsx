@@ -43,7 +43,7 @@ export default function Dashboard() {
     <div>
       <div className="hero">
         <h1>Your databases</h1>
-        <p>Create a Postgres, MySQL, MongoDB, or Redis instance, get a connection URL, and browse the data — all in one place.</p>
+        <p>Create a Postgres, MySQL, ClickHouse, MongoDB, or Redis instance, get a connection URL, and browse the data — all in one place.</p>
       </div>
 
       <section className="section">
@@ -59,7 +59,7 @@ export default function Dashboard() {
                   disabled={creating !== null}
                 >
                   <span className="engine-name">{engine.displayName}</span>
-                  <span className="engine-version">v{engine.defaultVersion}</span>
+                  <span className="engine-version">{/^\d/.test(engine.defaultVersion) ? `v${engine.defaultVersion}` : engine.defaultVersion}</span>
                   <span className="engine-cta">
                     {creating === engine.id ? (
                       <>

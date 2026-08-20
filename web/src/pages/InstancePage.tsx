@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
+import { downloadResultAsCsv, downloadResultAsJson } from "../lib/export";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
 import { useAuth } from "../components/AuthProvider";
@@ -12,6 +13,7 @@ function envVarFor(engine: string): string {
   switch (engine) {
     case "postgres":
     case "mysql":
+    case "clickhouse":
       return "DATABASE_URL";
     case "mongodb":
       return "MONGODB_URI";
@@ -26,6 +28,7 @@ function queryRunnerLabel(engine: string): string {
   switch (engine) {
     case "postgres":
     case "mysql":
+    case "clickhouse":
       return "Run SQL";
     case "redis":
       return "Run a command";
@@ -38,6 +41,7 @@ function queryRunnerPlaceholder(engine: string): string {
   switch (engine) {
     case "postgres":
     case "mysql":
+    case "clickhouse":
       return "select * from my_table limit 50;";
     case "redis":
       return "GET my_key";
@@ -363,29 +367,39 @@ function BrowsePanel({ instance }: { instance: Instance }) {
   );
 }
 
-function ResultTable({ result }: { result: QueryResult }) {
+function ResultTable({ result, exportName = "wharf-export" }: { result: QueryResult; exportName?: string }) {
   if (result.rows.length === 0) return <p className="empty">No rows.</p>;
   const columns = result.columns && result.columns.length > 0 ? result.columns : Object.keys(result.rows[0] as object);
   return (
-    <div className="table-scroll">
-      <table className="result-table">
-        <thead>
-          <tr>
-            {columns.map((c) => (
-              <th key={c}>{c}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.map((row, i) => (
-            <tr key={i}>
+    <div>
+      <div className="export-row">
+        <button className="ghost" onClick={() => downloadResultAsCsv(result, exportName)}>
+          Export CSV
+        </button>
+        <button className="ghost" onClick={() => downloadResultAsJson(result, exportName)}>
+          Export JSON
+        </button>
+      </div>
+      <div className="table-scroll">
+        <table className="result-table">
+          <thead>
+            <tr>
               {columns.map((c) => (
-                <td key={c}>{formatCell((row as Record<string, unknown>)[c])}</td>
+                <th key={c}>{c}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.rows.map((row, i) => (
+              <tr key={i}>
+                {columns.map((c) => (
+                  <td key={c}>{formatCell((row as Record<string, unknown>)[c])}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -405,6 +419,9 @@ function AdvancedView({ instance }: { instance: Instance }) {
   const [logsError, setLogsError] = useState<string | null>(null);
   const [backups, setBackups] = useState<Awaited<ReturnType<typeof api.listBackups>>>([]);
   const [busy, setBusy] = useState(false);
+  const [cpuInput, setCpuInput] = useState(instance.resources.cpu);
+  const [memInput, setMemInput] = useState(String(instance.resources.memoryMb));
+  const [resizing, setResizing] = useState(false);
 
   const refreshBackups = useCallback(() => {
     api.listBackups(instance.id).then(setBackups).catch(() => undefined);
@@ -432,6 +449,18 @@ function AdvancedView({ instance }: { instance: Instance }) {
     const interval = setInterval(poll, 4000);
     return () => clearInterval(interval);
   }, [instance.id, refreshBackups]);
+
+  async function handleResize() {
+    setResizing(true);
+    try {
+      await api.resizeInstance(instance.id, cpuInput, Number(memInput));
+      toast.push("Resized — takes effect immediately, no restart.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setResizing(false);
+    }
+  }
 
   async function handleBackup() {
     setBusy(true);
@@ -496,15 +525,26 @@ function AdvancedView({ instance }: { instance: Instance }) {
           <dd>
             {instance.engine} {instance.version}
           </dd>
-          <dt>CPU limit</dt>
-          <dd>{instance.resources.cpu} core(s)</dd>
-          <dt>Memory limit</dt>
-          <dd>{instance.resources.memoryMb} MB</dd>
           <dt>Disk</dt>
           <dd>{instance.resources.diskGb} GB volume</dd>
           <dt>Created</dt>
           <dd>{new Date(instance.createdAt).toLocaleString()}</dd>
         </dl>
+
+        <div className="resize-row">
+          <label>
+            CPU (cores)
+            <input type="text" value={cpuInput} onChange={(e) => setCpuInput(e.target.value)} />
+          </label>
+          <label>
+            Memory (MB)
+            <input type="number" value={memInput} onChange={(e) => setMemInput(e.target.value)} />
+          </label>
+          <button className="primary" onClick={handleResize} disabled={resizing}>
+            {resizing ? "Resizing…" : "Resize"}
+          </button>
+        </div>
+        <p className="empty">Takes effect immediately, no restart. Disk isn't live-resizable — a volume would need to be migrated.</p>
       </section>
 
       <section className="panel">

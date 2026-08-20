@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { quoteIdent as pgQuoteIdent } from "../browser/postgres.js";
 import { quoteIdent as mysqlQuoteIdent } from "../browser/mysql.js";
+import { quoteIdent as clickhouseQuoteIdent } from "../browser/clickhouse.js";
 import { tokenize } from "../browser/redis.js";
 
 // The identifier quoters are what stand between a table/collection name a
@@ -39,6 +40,16 @@ test("mysql quoteIdent accepts a plain identifier and backtick-wraps it", () => 
 test("mysql quoteIdent rejects anything that isn't a plain identifier", () => {
   for (const attempt of INJECTION_ATTEMPTS) {
     assert.throws(() => mysqlQuoteIdent(attempt), `should reject: ${JSON.stringify(attempt)}`);
+  }
+});
+
+test("clickhouse quoteIdent accepts a plain identifier and backtick-wraps it", () => {
+  assert.equal(clickhouseQuoteIdent("events"), "`events`");
+});
+
+test("clickhouse quoteIdent rejects anything that isn't a plain identifier", () => {
+  for (const attempt of INJECTION_ATTEMPTS) {
+    assert.throws(() => clickhouseQuoteIdent(attempt), `should reject: ${JSON.stringify(attempt)}`);
   }
 });
 

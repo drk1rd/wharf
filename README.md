@@ -3,7 +3,7 @@
 **Where your data docks.** Spin up a database, get a URL, look at your data — in one place, done exceptionally well.
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-![Postgres · MongoDB · MySQL · Redis](https://img.shields.io/badge/engines-Postgres%20%C2%B7%20MongoDB%20%C2%B7%20MySQL%20%C2%B7%20Redis-informational)
+![Postgres · MongoDB · MySQL · Redis · ClickHouse](https://img.shields.io/badge/engines-Postgres%20%C2%B7%20MongoDB%20%C2%B7%20MySQL%20%C2%B7%20Redis%20%C2%B7%20ClickHouse-informational)
 
 ![Wharf dashboard](./docs/screenshots/dashboard.png)
 
@@ -11,7 +11,7 @@ Open source. Self-host it on your own infrastructure, or run one shared instance
 
 ![Wharf instance page](./docs/screenshots/instance-simple.png)
 
-Ships **PostgreSQL, MongoDB, MySQL, and Redis**, real user accounts, and an **Ask your data** natural-language query box backed by [OpenRouter](https://openrouter.ai) with your choice of model. See [`PLAN.md`](./PLAN.md) for the full product plan, the competitive reasoning behind the scope, and an honest go/no-go assessment.
+Ships **PostgreSQL, MongoDB, MySQL, Redis, and ClickHouse**, real user accounts, live CPU/memory resize with no restart, CSV/JSON export, and an **Ask your data** natural-language query box backed by [OpenRouter](https://openrouter.ai) with your choice of model. See [`PLAN.md`](./PLAN.md) for the full product plan, the competitive reasoning behind the scope, and an honest go/no-go assessment.
 
 > This repo was previously named `alldb`; the product is now called **Wharf**. The git repository name is unchanged.
 
@@ -75,4 +75,4 @@ PLAN.md          product plan, competitive reasoning, roadmap, honest scoring
 
 ## Status
 
-Postgres, MongoDB, MySQL, and Redis, single Docker driver, vertical-scaling-only — working end to end: create, connect, browse, run queries, live metrics, logs. Real user accounts (signup/login/sessions) with per-user instance ownership, plus an admin/service token for the CLI. Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Backup/restore works for every engine except Redis (no clean stdin-restore path for an RDB dump — see `PLAN.md` §6.2a). Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts. See `PLAN.md` §13–14 for what's deliberately deferred and why.
+Postgres, MongoDB, MySQL, Redis, and ClickHouse, single Docker driver — working end to end: create, connect, browse, run queries, live metrics, logs, CSV/JSON export, and live CPU/memory resize (no restart). Backup/restore works for every engine, including Redis and ClickHouse — neither fits the exec-based dump/restore the other three use, so they back up via their protocol client directly (Redis: per-key `DUMP`/`RESTORE`; ClickHouse: schema + `JSONEachRow` data over its HTTP interface). Real user accounts (signup/login/sessions) with per-user instance ownership, plus an admin/service token for the CLI. A real test suite and CI run on every push — real Postgres/MySQL/MongoDB/Redis/ClickHouse containers in CI, not mocks (see `PLAN.md` §18). Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts, CLI login. See `PLAN.md` §13–14 for what's deliberately deferred and why.

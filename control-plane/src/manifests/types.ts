@@ -4,7 +4,7 @@ export interface InstanceSecrets {
   database: string;
 }
 
-export type BrowserAdapterId = "postgres" | "mongodb" | "mysql" | "redis";
+export type BrowserAdapterId = "postgres" | "mongodb" | "mysql" | "redis" | "clickhouse";
 
 export interface ServiceManifest {
   /** Stable engine id, also used as the docker image family and API value. */

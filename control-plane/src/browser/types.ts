@@ -24,4 +24,12 @@ export interface BrowserAdapter {
   runQuery(connectionString: string, query: string): Promise<QueryResult>;
   /** Compact plain-text schema summary, used as LLM context for natural-language queries. */
   getSchemaContext(connectionString: string): Promise<string>;
+  /**
+   * Client-protocol-level full backup/restore, for engines with no reliable
+   * stdin/stdout dump-and-restore command (see manifests/redis.ts) — an
+   * alternative to ServiceManifest.backup's exec-based mechanism, not a
+   * duplicate of it. Omit entirely for engines that already use `backup`.
+   */
+  dumpAll?(connectionString: string): Promise<Buffer>;
+  restoreAll?(connectionString: string, data: Buffer): Promise<void>;
 }

@@ -126,4 +126,6 @@ export const api = {
     request<void>(`/instances/${id}/restore`, { method: "POST", body: JSON.stringify({ backupId }) }),
   ask: (id: string, question: string, model?: string) =>
     request<AskResult>(`/instances/${id}/ask`, { method: "POST", body: JSON.stringify({ question, model }) }),
+  resizeInstance: (id: string, cpu: string, memoryMb: number) =>
+    request<Instance>(`/instances/${id}/resize`, { method: "PATCH", body: JSON.stringify({ cpu, memoryMb }) }),
 };

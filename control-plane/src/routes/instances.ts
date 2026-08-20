@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { instancesRepo } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
-import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance } from "../instances.js";
+import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
 import { backupSupported, createBackup, listBackups, restoreBackup } from "../backups.js";
 import { ownerIdFor } from "../auth.js";
@@ -76,6 +76,25 @@ instancesRouter.delete("/instances/:id", async (req, res) => {
   try {
     await deleteInstance(req.params.id, req.auth!);
     res.status(204).end();
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+instancesRouter.patch("/instances/:id/resize", async (req, res) => {
+  try {
+    const { cpu, memoryMb } = req.body ?? {};
+    if (cpu !== undefined && typeof cpu !== "string") {
+      res.status(400).json({ error: "cpu must be a string like \"1\" or \"0.5\"" });
+      return;
+    }
+    if (memoryMb !== undefined && typeof memoryMb !== "number") {
+      res.status(400).json({ error: "memoryMb must be a number" });
+      return;
+    }
+    const row = await resizeInstance(req.params.id, req.auth!, { cpu, memoryMb });
+    res.json(publicInstance(row));
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 500;
     res.status(status).json({ error: err instanceof Error ? err.message : String(err) });

@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { instancesRepo, type InstanceRow } from "./db.js";
 import { getManifest } from "./manifests/registry.js";
 import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
-import { createInstanceContainer, stopAndRemoveContainer, waitForPort } from "./docker.js";
+import { createInstanceContainer, stopAndRemoveContainer, updateContainerResources, waitForPort } from "./docker.js";
 import { canAccessInstance, type AuthContext } from "./auth.js";
+import { getBrowserAdapter } from "./browser/registry.js";
 
 // The host used in connection strings handed to users/clients — wherever the
 // docker daemon's published ports are actually reachable from (typically the
@@ -91,6 +92,36 @@ export async function createInstance(name: string, engine: string, ownerId: stri
   return row;
 }
 
+/**
+ * A bare TCP connect is not enough to call an engine ready — Postgres and
+ * MySQL's official images both do an initdb-then-restart startup sequence
+ * where the port accepts a TCP connection slightly before the server can
+ * actually serve a query (CI caught this for real: both failed their first
+ * post-"running" query with a real Postgres/MySQL container, while MongoDB
+ * and Redis — no such restart cycle — didn't). So "running" now means the
+ * browser adapter can actually complete a real call, not just that the port
+ * is open.
+ */
+async function waitForAdapterReady(
+  browserAdapter: ServiceManifest["browserAdapter"],
+  connectionString: string,
+  timeoutMs = 30000
+): Promise<void> {
+  const adapter = getBrowserAdapter(browserAdapter);
+  const deadline = Date.now() + timeoutMs;
+  let lastErr: unknown;
+  while (Date.now() < deadline) {
+    try {
+      await adapter.listObjects(connectionString);
+      return;
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("engine did not become query-ready in time");
+}
+
 async function provision(id: string, manifest: ServiceManifest, version: string, secrets: InstanceSecrets): Promise<void> {
   try {
     const { containerId, volumeName, hostPort } = await createInstanceContainer({
@@ -101,8 +132,12 @@ async function provision(id: string, manifest: ServiceManifest, version: string,
     });
     instancesRepo.update(id, { container_id: containerId, volume_name: volumeName, host_port: hostPort });
 
-    const ready = await waitForPort(PROBE_HOST, hostPort);
-    if (!ready) throw new Error("engine did not become ready in time");
+    const tcpReady = await waitForPort(PROBE_HOST, hostPort);
+    if (!tcpReady) throw new Error("engine did not become reachable in time");
+
+    const connectionString = manifest.connectionString(secrets, PROBE_HOST, hostPort);
+    await waitForAdapterReady(manifest.browserAdapter, connectionString);
+
     instancesRepo.update(id, { status: "running" });
   } catch (err) {
     instancesRepo.update(id, {
@@ -119,6 +154,44 @@ export async function deleteInstance(id: string, auth: AuthContext): Promise<boo
   }
   instancesRepo.remove(id);
   return true;
+}
+
+function badRequest(message: string): never {
+  const err = new Error(message);
+  (err as Error & { status?: number }).status = 400;
+  throw err;
+}
+
+/**
+ * Live CPU/memory resize — no restart, no recreation, takes effect immediately
+ * via the container's cgroup limits. Disk isn't resizable this way (a Docker
+ * volume can't be live-grown without a migration), so it's deliberately not
+ * part of this — see PLAN.md.
+ */
+export async function resizeInstance(id: string, auth: AuthContext, opts: { cpu?: string; memoryMb?: number }): Promise<InstanceRow> {
+  const row = requireRunningInstance(id, auth);
+
+  if (opts.cpu !== undefined) {
+    const cpu = parseFloat(opts.cpu);
+    if (!Number.isFinite(cpu) || cpu < 0.1 || cpu > 16) {
+      badRequest("cpu must be a number between 0.1 and 16 (cores)");
+    }
+  }
+  if (opts.memoryMb !== undefined) {
+    if (!Number.isFinite(opts.memoryMb) || opts.memoryMb < 128 || opts.memoryMb > 32768) {
+      badRequest("memoryMb must be between 128 and 32768");
+    }
+  }
+  if (opts.cpu === undefined && opts.memoryMb === undefined) {
+    badRequest("provide cpu and/or memoryMb to resize");
+  }
+
+  await updateContainerResources(row.container_id as string, opts);
+  instancesRepo.update(id, {
+    ...(opts.cpu !== undefined ? { cpu: opts.cpu } : {}),
+    ...(opts.memoryMb !== undefined ? { memory_mb: opts.memoryMb } : {}),
+  });
+  return instancesRepo.get(id)!;
 }
 
 function notFound(): never {

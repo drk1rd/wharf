@@ -36,7 +36,12 @@ export async function listModels(): Promise<OpenRouterModel[]> {
   return models;
 }
 
-export type AskableEngine = "postgres" | "mysql" | "mongodb";
+export type AskableEngine = "postgres" | "mysql" | "clickhouse" | "mongodb";
+type SqlEngine = "postgres" | "mysql" | "clickhouse";
+
+function isSqlEngine(engine: AskableEngine): engine is SqlEngine {
+  return engine === "postgres" || engine === "mysql" || engine === "clickhouse";
+}
 
 export interface GeneratedQuery {
   query: string;
@@ -60,15 +65,15 @@ const GENERATE_QUERY_TOOL = {
   },
 } as const;
 
-const SQL_DIALECT_NAME: Record<"postgres" | "mysql", string> = {
+const SQL_DIALECT_NAME: Record<SqlEngine, string> = {
   postgres: "PostgreSQL",
   mysql: "MySQL",
+  clickhouse: "ClickHouse",
 };
 
 function systemPromptFor(engine: AskableEngine, schemaContext: string): string {
-  const rules =
-    engine === "postgres" || engine === "mysql"
-      ? `You translate a plain-English question into a single read-only ${SQL_DIALECT_NAME[engine]} SELECT statement against the schema below. ` +
+  const rules = isSqlEngine(engine)
+    ? `You translate a plain-English question into a single read-only ${SQL_DIALECT_NAME[engine]} SELECT statement against the schema below. ` +
         "Never generate INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or any statement that is not a SELECT. " +
         "Only reference tables and columns that appear in the schema. If the question can't be answered from this schema, " +
         "generate `SELECT 'unable to answer from this schema' AS error` instead of guessing at table/column names."
@@ -139,7 +144,7 @@ export async function generateQuery(
     throw new Error("the model's response was missing query/explanation");
   }
 
-  if (engine === "postgres" || engine === "mysql") {
+  if (isSqlEngine(engine)) {
     const normalized = input.query.trim().replace(/;+\s*$/, "");
     if (!/^select\b/i.test(normalized)) {
       throw new Error("the generated query was not a read-only SELECT — refusing to run it");

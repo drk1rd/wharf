@@ -5,6 +5,8 @@ import { backupsRepo, type BackupRow, type InstanceRow } from "./db.js";
 import { getManifest } from "./manifests/registry.js";
 import type { InstanceSecrets } from "./manifests/types.js";
 import { execCapture, execWithStdin } from "./docker.js";
+import { internalConnectionString } from "./instances.js";
+import { getBrowserAdapter } from "./browser/registry.js";
 
 const dataDir = process.env.WHARF_DATA_DIR ?? path.join(process.cwd(), "data");
 const backupsDir = path.join(dataDir, "backups");
@@ -17,26 +19,42 @@ function secretsOf(row: InstanceRow): InstanceSecrets {
 }
 
 export function backupSupported(engine: string): boolean {
-  return Boolean(getManifest(engine)?.backup);
+  const manifest = getManifest(engine);
+  if (!manifest) return false;
+  return Boolean(manifest.backup) || Boolean(getBrowserAdapter(manifest.browserAdapter).dumpAll);
+}
+
+function unsupportedError(displayName: string): Error {
+  const err = new Error(`backup/restore is not supported for ${displayName} yet`);
+  (err as Error & { status?: number }).status = 400;
+  return err;
 }
 
 export async function createBackup(row: InstanceRow): Promise<BackupRow> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
-  if (!manifest.backup) {
-    const err = new Error(`backup/restore is not supported for ${manifest.displayName} yet`);
-    (err as Error & { status?: number }).status = 400;
-    throw err;
-  }
   if (!row.container_id) throw new Error("instance has no running container");
 
-  const secrets = secretsOf(row);
-  const dump = await execCapture(row.container_id, manifest.backup.dumpCmd(secrets));
+  let dump: Buffer;
+  let fileExt: string;
+
+  if (manifest.backup) {
+    const secrets = secretsOf(row);
+    dump = await execCapture(row.container_id, manifest.backup.dumpCmd(secrets));
+    fileExt = manifest.backup.fileExt;
+  } else {
+    const adapter = getBrowserAdapter(manifest.browserAdapter);
+    if (!adapter.dumpAll) throw unsupportedError(manifest.displayName);
+    const connectionString = internalConnectionString(row);
+    if (!connectionString) throw new Error("instance has no connection info yet");
+    dump = await adapter.dumpAll(connectionString);
+    fileExt = "json";
+  }
 
   const instanceDir = path.join(backupsDir, row.id);
   await fs.mkdir(instanceDir, { recursive: true });
   const id = randomUUID();
-  const filePath = path.join(instanceDir, `${id}.${manifest.backup.fileExt}`);
+  const filePath = path.join(instanceDir, `${id}.${fileExt}`);
   await fs.writeFile(filePath, dump);
 
   const backupRow: BackupRow = {
@@ -57,17 +75,21 @@ export function listBackups(instanceId: string): BackupRow[] {
 export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
-  if (!manifest.backup) {
-    const err = new Error(`backup/restore is not supported for ${manifest.displayName} yet`);
-    (err as Error & { status?: number }).status = 400;
-    throw err;
-  }
   if (!row.container_id) throw new Error("instance has no running container");
 
   const backup = backupsRepo.get(backupId);
   if (!backup || backup.instance_id !== row.id) throw new Error("backup not found for this instance");
-
-  const secrets = secretsOf(row);
   const data = await fs.readFile(backup.file_path);
-  await execWithStdin(row.container_id, manifest.backup.restoreCmd(secrets), data);
+
+  if (manifest.backup) {
+    const secrets = secretsOf(row);
+    await execWithStdin(row.container_id, manifest.backup.restoreCmd(secrets), data);
+    return;
+  }
+
+  const adapter = getBrowserAdapter(manifest.browserAdapter);
+  if (!adapter.restoreAll) throw unsupportedError(manifest.displayName);
+  const connectionString = internalConnectionString(row);
+  if (!connectionString) throw new Error("instance has no connection info yet");
+  await adapter.restoreAll(connectionString, data);
 }

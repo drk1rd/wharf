@@ -538,6 +538,18 @@ button.ghost {
   font-variant-numeric: tabular-nums;
 }
 
+.export-row {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.export-row button {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
 .table-scroll {
   overflow-x: auto;
   max-height: 380px;
@@ -592,9 +604,39 @@ button.ghost {
   resize: vertical;
 }
 
-.ask-row {
+.ask-row,
+.resize-row {
   display: flex;
   gap: 8px;
+  align-items: flex-end;
+}
+
+.resize-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.resize-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.resize-row input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  width: 110px;
 }
 
 .ask-row input[type="text"] {

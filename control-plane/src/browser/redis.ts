@@ -86,4 +86,48 @@ export const redisAdapter: BrowserAdapter = {
       return lines.length > 0 ? lines.join("\n") : "(no keys found)";
     });
   },
+
+  /**
+   * A full backup redis-cli can't give us in one shot: DUMP is the RESP
+   * serialization of one key's value, so this walks every key (no cap —
+   * unlike listObjects, this must be complete) and stores {key, ttlMs, data}
+   * per key, base64-encoding DUMP's binary payload so it survives JSON.
+   */
+  async dumpAll(connectionString): Promise<Buffer> {
+    return withClient(connectionString, async (client) => {
+      const entries: { key: string; ttlMs: number; data: string }[] = [];
+      let cursor = 0;
+      do {
+        const res = await client.scan(cursor, { COUNT: 200 });
+        cursor = res.cursor;
+        for (const key of res.keys) {
+          // DUMP's payload is arbitrary binary — must go through returnBuffers,
+          // never the client's default string decoding, or it silently corrupts.
+          const [dump, pttl] = await Promise.all([
+            client.sendCommand<Buffer | null>(["DUMP", key], { returnBuffers: true }),
+            client.pTTL(key),
+          ]);
+          if (dump === null) continue; // key expired between SCAN and DUMP
+          entries.push({ key, ttlMs: pttl > 0 ? pttl : 0, data: dump.toString("base64") });
+        }
+      } while (cursor !== 0);
+      return Buffer.from(JSON.stringify({ format: "wharf-redis-dump-v1", entries }), "utf8");
+    });
+  },
+
+  async restoreAll(connectionString, data): Promise<void> {
+    const parsed = JSON.parse(data.toString("utf8")) as {
+      format?: string;
+      entries: { key: string; ttlMs: number; data: string }[];
+    };
+    if (parsed.format !== "wharf-redis-dump-v1") {
+      throw new Error("this backup wasn't produced by Wharf's Redis dump — refusing to restore it");
+    }
+    return withClient(connectionString, async (client) => {
+      for (const entry of parsed.entries) {
+        const payload = Buffer.from(entry.data, "base64");
+        await client.sendCommand(["RESTORE", entry.key, String(entry.ttlMs), payload, "REPLACE"]);
+      }
+    });
+  },
 };

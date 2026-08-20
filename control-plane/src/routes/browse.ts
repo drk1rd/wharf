@@ -95,7 +95,7 @@ browseRouter.post("/instances/:id/ask", async (req, res) => {
     }
 
     const { adapter, connectionString, engine } = adapterFor(req.params.id, req.auth!);
-    if (engine !== "postgres" && engine !== "mongodb" && engine !== "mysql") {
+    if (engine !== "postgres" && engine !== "mongodb" && engine !== "mysql" && engine !== "clickhouse") {
       res.status(400).json({ error: `ask-your-data isn't available for ${engine} yet — key-value stores don't map cleanly to a single generated query` });
       return;
     }

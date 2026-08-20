@@ -84,6 +84,15 @@ export async function createInstanceContainer(opts: {
   }
 }
 
+/** Live resource resize on a running container — no restart, no recreation. */
+export async function updateContainerResources(containerId: string, opts: { cpu?: string; memoryMb?: number }): Promise<void> {
+  const container = docker.getContainer(containerId);
+  const update: { NanoCpus?: number; Memory?: number } = {};
+  if (opts.cpu !== undefined) update.NanoCpus = Math.round(parseFloat(opts.cpu) * 1e9);
+  if (opts.memoryMb !== undefined) update.Memory = opts.memoryMb * 1024 * 1024;
+  await container.update(update);
+}
+
 export async function waitForPort(host: string, port: number, timeoutMs = 45000): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {

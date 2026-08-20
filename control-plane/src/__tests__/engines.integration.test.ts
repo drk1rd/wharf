@@ -44,6 +44,17 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   assert.equal(query.status, 200);
   assert.equal(query.body.rows[0].one, 1);
 
+  // Live resize — no restart, checked here since it applies to any running
+  // engine and postgres is as good a place as any to prove it end to end.
+  const resized = await client.patch(`/api/instances/${instance.id}/resize`, { cpu: "0.5", memoryMb: 256 });
+  assert.equal(resized.status, 200);
+  assert.equal(resized.body.resources.cpu, "0.5");
+  assert.equal(resized.body.resources.memoryMb, 256);
+  // The instance must still actually work after a live resize, not just report new numbers.
+  const afterResize = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 2 AS two" });
+  assert.equal(afterResize.status, 200);
+  assert.equal(afterResize.body.rows[0].two, 2);
+
   const backup = await client.post(`/api/instances/${instance.id}/backups`);
   assert.equal(backup.status, 201);
   assert.ok(backup.body.size_bytes > 0);
@@ -86,10 +97,10 @@ test("mongodb: create, connect, browse, query, backup", { skip, timeout: 150_000
   await client.delete(`/api/instances/${instance.id}`);
 });
 
-test("redis: create, connect, run commands, no backup support", { skip, timeout: 150_000 }, async () => {
+test("redis: create, connect, run commands, backup and restore round-trip", { skip, timeout: 150_000 }, async () => {
   const instance = await createAndWait("redis");
   assert.ok(instance.connection?.connectionString.startsWith("redis://"));
-  assert.equal(instance.backupSupported, false);
+  assert.equal(instance.backupSupported, true);
 
   const set = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SET testkey hello" });
   assert.equal(set.status, 200);
@@ -99,7 +110,56 @@ test("redis: create, connect, run commands, no backup support", { skip, timeout:
   assert.equal(get.body.rows[0], "hello");
 
   const backup = await client.post(`/api/instances/${instance.id}/backups`);
-  assert.equal(backup.status, 400);
+  assert.equal(backup.status, 201);
+  assert.ok(backup.body.size_bytes > 0);
+
+  // Prove restore actually replaces state, not just "runs without erroring":
+  // overwrite the key, restore the backup taken before that, confirm the
+  // original value is back — a round trip through real DUMP/RESTORE bytes.
+  await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SET testkey overwritten" });
+  const restore = await client.post(`/api/instances/${instance.id}/restore`, { backupId: backup.body.id });
+  assert.equal(restore.status, 204);
+
+  const afterRestore = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "GET testkey" });
+  assert.equal(afterRestore.body.rows[0], "hello");
+
+  await client.delete(`/api/instances/${instance.id}`);
+});
+
+test("clickhouse: create, connect, browse, query, backup and restore round-trip", { skip, timeout: 150_000 }, async () => {
+  const instance = await createAndWait("clickhouse");
+  assert.ok(instance.connection?.connectionString.startsWith("http://"));
+  assert.equal(instance.backupSupported, true);
+
+  await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: "CREATE TABLE events (id UInt32, name String) ENGINE = MergeTree ORDER BY id",
+  });
+  await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: "INSERT INTO events (id, name) VALUES (1, 'first')",
+  });
+
+  const objects = await client.get(`/api/instances/${instance.id}/browse/objects`);
+  assert.equal(objects.status, 200);
+  assert.ok(objects.body.some((o: any) => o.name === "events"));
+
+  const select = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT * FROM events" });
+  assert.equal(select.status, 200);
+  assert.equal(select.body.rows[0].name, "first");
+
+  const backup = await client.post(`/api/instances/${instance.id}/backups`);
+  assert.equal(backup.status, 201);
+  assert.ok(backup.body.size_bytes > 0);
+
+  // The real "recover from data loss" scenario: the table itself is gone, not
+  // just its rows. Restore has to recreate it from the captured DDL, not only
+  // replay INSERTs into a table that's assumed to still exist.
+  await client.post(`/api/instances/${instance.id}/browse/query`, { query: "DROP TABLE events" });
+  const restore = await client.post(`/api/instances/${instance.id}/restore`, { backupId: backup.body.id });
+  assert.equal(restore.status, 204);
+
+  const afterRestore = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT * FROM events" });
+  assert.equal(afterRestore.status, 200);
+  assert.equal(afterRestore.body.rows[0].name, "first");
 
   await client.delete(`/api/instances/${instance.id}`);
 });

@@ -4,9 +4,10 @@ import { postgresManifest } from "../manifests/postgres.js";
 import { mongodbManifest } from "../manifests/mongodb.js";
 import { mysqlManifest } from "../manifests/mysql.js";
 import { redisManifest } from "../manifests/redis.js";
+import { clickhouseManifest } from "../manifests/clickhouse.js";
 import { getManifest, listManifests } from "../manifests/registry.js";
 
-const manifests = [postgresManifest, mongodbManifest, mysqlManifest, redisManifest];
+const manifests = [postgresManifest, mongodbManifest, mysqlManifest, redisManifest, clickhouseManifest];
 
 test("every manifest resolves its default version's image", () => {
   for (const m of manifests) {
@@ -35,13 +36,14 @@ test("generated passwords are non-trivial and different per instance", () => {
   }
 });
 
-test("registry resolves all four shipped engines and nothing else", () => {
+test("registry resolves all five shipped engines and nothing else", () => {
   assert.equal(getManifest("postgres")?.id, "postgres");
   assert.equal(getManifest("mongodb")?.id, "mongodb");
   assert.equal(getManifest("mysql")?.id, "mysql");
   assert.equal(getManifest("redis")?.id, "redis");
+  assert.equal(getManifest("clickhouse")?.id, "clickhouse");
   assert.equal(getManifest("not-a-real-engine"), undefined);
-  assert.equal(listManifests().length, 4);
+  assert.equal(listManifests().length, 5);
 });
 
 test("redis is the only manifest requiring a command override (password must be a CLI arg, not env)", () => {
@@ -51,14 +53,18 @@ test("redis is the only manifest requiring a command override (password must be 
   assert.ok(cmd.includes("--requirepass"), "redis command must pass --requirepass");
   assert.ok(cmd.includes(secrets.password), "redis command must include the generated password");
 
-  for (const m of [postgresManifest, mongodbManifest, mysqlManifest]) {
+  for (const m of [postgresManifest, mongodbManifest, mysqlManifest, clickhouseManifest]) {
     assert.equal(m.command, undefined, `${m.id}: should configure itself via env(), not command()`);
   }
 });
 
-test("redis is the only manifest without backup/restore support", () => {
+test("postgres/mongodb/mysql back up via exec commands; redis and clickhouse back up via their adapter instead", () => {
   assert.ok(postgresManifest.backup, "postgres should support backup/restore");
   assert.ok(mongodbManifest.backup, "mongodb should support backup/restore");
   assert.ok(mysqlManifest.backup, "mysql should support backup/restore");
-  assert.equal(redisManifest.backup, undefined, "redis intentionally has no backup/restore path — see PLAN.md §6.2a");
+  // Neither is unsupported — see backupSupported() in backups.test.ts — they
+  // just don't fit the exec-based dump/restore shape the other three use, so
+  // they back up via the browser adapter's dumpAll/restoreAll instead.
+  assert.equal(redisManifest.backup, undefined);
+  assert.equal(clickhouseManifest.backup, undefined);
 });
