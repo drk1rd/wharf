@@ -68,7 +68,7 @@ Depth before breadth. Ship **a small number of engines done exceptionally well**
 | Phase | Engines |
 |---|---|
 | MVP (Phase 1) | **PostgreSQL and MongoDB** — the whole simple/advanced UI, the whole data-browser experience, built and polished against a relational and a document engine so the manifest/adapter pattern is proven on two genuinely different protocols, not just parameterized SQL twice |
-| Phase 2 | MySQL/MariaDB, Redis/Valkey |
+| Phase 2 (shipped) | **MySQL and Redis** — see §6.2a for what this proved and didn't |
 | Phase 3 | ClickHouse, Elasticsearch/OpenSearch, MinIO, SQLite (ephemeral/dev) |
 | Phase 4 | Vector DBs (Qdrant, Weaviate), Neo4j |
 
@@ -93,6 +93,14 @@ The instinct "make text-to-SQL obsolete via something MCP-like" is worth separat
 - **An in-app "ask your data a question in plain English" box**, built directly into the Simple view, is different: it works for someone who never opens an AI coding tool at all, which fits "adapts to whoever's using it" better than an agent integration does. It's also cheap to build on top of what already exists — the query runner and schema-listing endpoints did almost all the work.
 
 So this shipped as the second kind: a plain-English input in the Simple view that calls Claude with the instance's schema, gets back a single query (a read-only `SELECT` for Postgres; a structured `{collection, filter}` for Mongo — never raw code execution against the container either way), runs it through the same `runQuery` path the manual query runner uses, and shows the result. It's gated on `ANTHROPIC_API_KEY` being set on the control plane, off by default for self-hosters who haven't configured it, with a visible hint rather than a hidden feature. Don't market it as "obsoletes text-to-SQL" — several competitors already have some version of natural-language query access; market it as "you don't have to know SQL to ask your database a question."
+
+### 6.2a What Phase 2 (MySQL + Redis) actually proved
+
+The stated goal of Phase 2 (§13) was to test whether the manifest/adapter pattern from §8 generalizes, not just to add engines for their own sake. It mostly held up, with one real gap it exposed:
+
+- **MySQL was close to a copy-paste of the Postgres manifest and adapter** — different image, different identifier-quoting character (backtick vs double-quote), different `information_schema` query shape, same everything else (connection string template, backup via a SQL dump tool, the ask-your-data SQL prompt just needed the dialect name swapped in). This is exactly the outcome the pattern was supposed to produce.
+- **Redis broke two assumptions the pattern had baked in without anyone noticing**, because Postgres and Mongo happen to agree on both: (1) that a manifest only needs `env()` to configure the container — Redis's password has to be a server *argument* (`--requirepass`), which didn't exist as a manifest concept until Redis needed it, so `ServiceManifest.command()` and the corresponding `Cmd` wiring in the Docker driver got added; (2) that every engine can do a clean stdin/stdout dump-and-restore — Redis's dump path works (`redis-cli --rdb -`) but there's no equivalent stdin-based restore, so `backup` became optional on the manifest type rather than forcing a fake or broken implementation to exist. Both changes are now load-bearing for any future non-SQL engine, not just Redis.
+- **A real bug only a live Docker daemon could catch**: the first end-to-end run against a real (if network-restricted) daemon in this environment showed that a failed container create (bad image, unavailable port, ...) leaked the volume it had already created — the instance row never recorded a volume name to clean up later, so nothing could remove it. Fixed by making volume creation and container creation a single unit that cleans up after itself on any failure. This is the kind of bug that "the code compiles and the manifest pattern looks right on paper" cannot surface — it took an actual daemon rejecting an actual image pull to find it.
 
 ## 7. Architecture
 
@@ -211,11 +219,12 @@ Only one manifest (`postgres`) needs to exist for Phase 1. The format is designe
 ```
 control-plane/           # Express + TypeScript API
   src/
-    manifests/            # postgres.ts, mongodb.ts, registry.ts — the extensibility contract
-    browser/              # postgres.ts, mongodb.ts adapters — list/browse/query, normalized
+    manifests/            # postgres.ts, mongodb.ts, mysql.ts, redis.ts, registry.ts — the extensibility contract
+    browser/              # matching adapters — list/browse/query/schema-context, normalized
+    ask.ts                 # Claude-powered natural-language query generation
     docker.ts              # provisioner: create/stop/stats/logs/exec via dockerode
     instances.ts            # orchestration: create/delete/connection-string logic
-    backups.ts               # dump/restore via docker exec, binary-safe
+    backups.ts               # dump/restore via docker exec, binary-safe, optional per-engine
     db.ts                     # SQLite metadata store (instances, backups)
     routes/                    # instances.ts, browse.ts — the REST API
 web/                      # React + Vite UI — Simple/Advanced instance views
@@ -230,7 +239,7 @@ No separate gateway service or pluggable-driver abstraction yet — ports are pu
 
 ## 13. MVP scope (Phase 1 — prove the wedge, not the breadth)
 
-Goal: a stranger can `docker compose up`, open the UI, create a Postgres or MongoDB instance, get a URL, and say **"this is the best database browsing/connecting experience I've used"** — in under 5 minutes, with zero docs beyond the README.
+Goal: a stranger can `docker compose up`, open the UI, create a Postgres, MongoDB, MySQL, or Redis instance, get a URL, and say **"this is the best database browsing/connecting experience I've used"** — in under 5 minutes, with zero docs beyond the README.
 
 - [x] Control plane: create/list/delete instance, optional shared-token auth, Docker driver.
 - [x] Service manifests: Postgres, MongoDB.
@@ -240,24 +249,25 @@ Goal: a stranger can `docker compose up`, open the UI, create a Postgres or Mong
 - [x] CLI: `wharf create <engine>`, `wharf list`, `wharf rm`, `wharf url <id>`.
 - [x] `docker-compose.yml` self-host install (with the host-gateway networking fix needed for the control plane to reach sibling containers from inside its own container).
 - [x] Backup/restore (`pg_dump`/`mongodump` via `docker exec`, binary-safe) — beyond the original MVP checklist, included because it was cheap given the exec plumbing backups already needed.
-- [x] **Ask your data** (natural-language query, beyond the original MVP checklist — see §6.2): a plain-English question box in the Simple view, gated on `ANTHROPIC_API_KEY` being set. Not "text-to-SQL as a headline feature" per §6.1's reasoning — it's a small addition on top of the query runner that already existed, aimed at the person who doesn't want to learn SQL/Mongo query syntax at all.
-- [ ] README quickstart — written; **not yet run end-to-end on a machine with a live Docker daemon** (this build environment has the Docker CLI but no daemon — see status note below).
-- [ ] **Still deferred**: syntax highlighting/autocomplete in the query runner, CSV/JSON export, Kubernetes driver, MCP server, billing/cloud, multi-user auth. Not started until Phase 1 gets real usage feedback.
+- [x] **Ask your data** (natural-language query, beyond the original MVP checklist — see §6.2): a plain-English question box in the Simple view, gated on `ANTHROPIC_API_KEY` being set. Not "text-to-SQL as a headline feature" per §6.1's reasoning — it's a small addition on top of the query runner that already existed, aimed at the person who doesn't want to learn SQL/Mongo query syntax at all. Extended to MySQL when it shipped; explicitly not offered for Redis (see §6.2/AskPanel).
+- [x] **Phase 2 engines (MySQL, Redis)** — landed ahead of the original "prove Postgres/Mongo first" sequencing once real usage confirmed the core experience works; see §6.2a for what it proved about the manifest pattern, including a real bug (a container-create-failure volume leak) that only a live Docker daemon surfaced.
+- [x] README quickstart — **run end-to-end on a real machine with Docker** (not just this build sandbox): `docker compose up --build` came up clean and instances were created through the UI successfully.
+- [ ] **Still deferred**: syntax highlighting/autocomplete in the query runner, CSV/JSON export, Kubernetes driver, MCP server, billing/cloud, multi-user auth, Redis backup/restore (see §6.2a — no clean stdin-restore path without a container restart). Not started until this Phase 1+2 slice gets more real usage feedback.
 
-**Honest status**: all of the above was built and type-checked/unit-smoke-tested against the real Express app and SQLite store in this session. Two things specifically have not been exercised against the real, live systems they depend on:
+**Honest status**: this was built, type-checked, and unit-smoke-tested against the real Express app and SQLite store throughout. Two rounds of live verification since the first draft of this status note:
 
-1. **Docker provisioning** — creating a real Postgres/Mongo container, waiting for it to become healthy, connecting to it, browsing real data. This sandbox has the `docker` CLI but no running daemon.
-2. **The "ask your data" Claude API call** — the request shape (strict tool use, forced `tool_choice`, the read-only-SQL / structured-Mongo-filter safety checks on the response) is written against the current `@anthropic-ai/sdk` and type-checks against it, and the feature's on/off gating and error surfacing were verified live (config endpoint, disabled-state UI, and the downstream error path when the target database isn't reachable). What's *not* verified is a real round trip to the Anthropic API — this sandbox has no `ANTHROPIC_API_KEY` configured.
+1. **Self-host quickstart, on a real machine**: confirmed working — `docker compose up --build`, create flow, connection info, all as designed.
+2. **A real (if network-restricted) Docker daemon, in this build sandbox**: this environment couldn't run compose end-to-end (its own egress policy blocks pulling images from Docker Hub — an environment restriction, not a code issue), but starting the daemon directly here was enough to exercise the actual `dockerode` calls — volume/container creation, failure handling, cleanup — for the first time, and it found a real bug (§6.2a's volume leak) that no amount of type-checking or mocking would have.
 
-First thing to do with a real Docker host and a real API key: `cd deploy && docker compose up --build`, create one of each engine, set `ANTHROPIC_API_KEY`, and ask it a real question — fix whatever that surfaces. First runs against real external systems always find something a sandbox without them can't.
+Still unverified: **the "ask your data" Claude API round trip** — the request shape (strict tool use, forced `tool_choice`, the read-only-SQL / structured-filter safety checks on the response) type-checks against the current `@anthropic-ai/sdk`, and the feature's gating/error-surfacing was verified live, but no `ANTHROPIC_API_KEY` has been available in any session so far to confirm a real response from Claude. That's the next concrete gap to close, not a hypothetical one — everything else in this list has now had a real external system behind it at least once.
 
 ## 14. Roadmap after MVP
 
-1. **Phase 2 engines** (MySQL, Redis) — once Postgres/Mongo are proven, to validate the manifest pattern generalizes further.
+1. ~~**Phase 2 engines** (MySQL, Redis)~~ — shipped; see §6.2a.
 2. **MCP server** — wraps the control-plane API as MCP tools once there's a human-proven product underneath it. Explicitly not a launch feature (see §6.1) — it's how an already-good product becomes usable by agents too, not what makes the product good.
 3. **Kubernetes driver** — self-host-at-scale, and the basis for Wharf Cloud's backend.
 4. **Wharf Cloud** — hosted control plane; billing, org/team management, regions.
-5. **Backups & restore automation, resize UI, alerting, Phase 3/4 engines.**
+5. **Backups & restore automation, resize UI, alerting, Phase 3/4 engines** (including closing the Redis backup/restore gap — needs a different mechanism than the generic exec-based one, see §6.2a).
 6. **"Bring your own cloud"** — cloud-hosted control plane provisioning into the customer's own account.
 
 ## 15. Open decisions (need a call before/while building)

@@ -3,7 +3,7 @@ import { instancesRepo } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
 import { connectionInfo, createInstance, deleteInstance, requireRunningInstance } from "../instances.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
-import { createBackup, listBackups, restoreBackup } from "../backups.js";
+import { backupSupported, createBackup, listBackups, restoreBackup } from "../backups.js";
 
 export const instancesRouter = Router();
 
@@ -20,6 +20,7 @@ function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
     error: row.error,
     resources: { cpu: row.cpu, memoryMb: row.memory_mb, diskGb: row.disk_gb },
     connection: conn,
+    backupSupported: backupSupported(row.engine),
   };
 }
 

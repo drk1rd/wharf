@@ -43,7 +43,7 @@ export default function Dashboard() {
     <div>
       <div className="hero">
         <h1>Your databases</h1>
-        <p>Create a Postgres or MongoDB instance, get a connection URL, and browse the data — all in one place.</p>
+        <p>Create a Postgres, MySQL, MongoDB, or Redis instance, get a connection URL, and browse the data — all in one place.</p>
       </div>
 
       <section className="section">

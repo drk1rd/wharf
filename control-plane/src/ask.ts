@@ -37,10 +37,17 @@ const GENERATE_QUERY_TOOL: Anthropic.Tool = {
   },
 };
 
-function systemPromptFor(engine: string, schemaContext: string): string {
+export type AskableEngine = "postgres" | "mysql" | "mongodb";
+
+const SQL_DIALECT_NAME: Record<"postgres" | "mysql", string> = {
+  postgres: "PostgreSQL",
+  mysql: "MySQL",
+};
+
+function systemPromptFor(engine: AskableEngine, schemaContext: string): string {
   const rules =
-    engine === "postgres"
-      ? "You translate a plain-English question into a single read-only PostgreSQL SELECT statement against the schema below. " +
+    engine === "postgres" || engine === "mysql"
+      ? `You translate a plain-English question into a single read-only ${SQL_DIALECT_NAME[engine]} SELECT statement against the schema below. ` +
         "Never generate INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, or any statement that is not a SELECT. " +
         "Only reference tables and columns that appear in the schema. If the question can't be answered from this schema, " +
         "generate `SELECT 'unable to answer from this schema' AS error` instead of guessing at table/column names."
@@ -54,7 +61,7 @@ function systemPromptFor(engine: string, schemaContext: string): string {
 }
 
 export async function generateQuery(
-  engine: "postgres" | "mongodb",
+  engine: AskableEngine,
   schemaContext: string,
   question: string
 ): Promise<GeneratedQuery> {
@@ -73,7 +80,7 @@ export async function generateQuery(
   }
   const input = toolUse.input as { query: string; explanation: string };
 
-  if (engine === "postgres") {
+  if (engine === "postgres" || engine === "mysql") {
     const normalized = input.query.trim().replace(/;+\s*$/, "");
     if (!/^select\b/i.test(normalized)) {
       throw new Error("the generated query was not a read-only SELECT — refusing to run it");

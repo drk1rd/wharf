@@ -16,9 +16,18 @@ function secretsOf(row: InstanceRow): InstanceSecrets {
   return { username: row.username, password: row.password, database: row.database_name };
 }
 
+export function backupSupported(engine: string): boolean {
+  return Boolean(getManifest(engine)?.backup);
+}
+
 export async function createBackup(row: InstanceRow): Promise<BackupRow> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
+  if (!manifest.backup) {
+    const err = new Error(`backup/restore is not supported for ${manifest.displayName} yet`);
+    (err as Error & { status?: number }).status = 400;
+    throw err;
+  }
   if (!row.container_id) throw new Error("instance has no running container");
 
   const secrets = secretsOf(row);
@@ -48,6 +57,11 @@ export function listBackups(instanceId: string): BackupRow[] {
 export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
+  if (!manifest.backup) {
+    const err = new Error(`backup/restore is not supported for ${manifest.displayName} yet`);
+    (err as Error & { status?: number }).status = 400;
+    throw err;
+  }
   if (!row.container_id) throw new Error("instance has no running container");
 
   const backup = backupsRepo.get(backupId);

@@ -43,31 +43,45 @@ export async function createInstanceContainer(opts: {
   const volumeName = `wharf-${instanceId}`;
   await docker.createVolume({ Name: volumeName });
 
-  const portKey = `${manifest.containerPort}/tcp`;
-  const container = await docker.createContainer({
-    name: `wharf-${instanceId}`,
-    Image: image,
-    Env: Object.entries(manifest.env(secrets)).map(([k, v]) => `${k}=${v}`),
-    ExposedPorts: { [portKey]: {} },
-    Labels: { "wharf.instance": instanceId, "wharf.engine": manifest.id },
-    HostConfig: {
-      PortBindings: { [portKey]: [{ HostPort: "" }] },
-      Binds: [`${volumeName}:${manifest.dataPath}`],
-      RestartPolicy: { Name: "unless-stopped" },
-      NanoCpus: Math.round(parseFloat(manifest.resourceDefaults.cpu) * 1e9),
-      Memory: manifest.resourceDefaults.memoryMb * 1024 * 1024,
-    },
-  });
+  // From here on, any failure must remove the volume we just created —
+  // otherwise a failed create (bad image, no port available, ...) leaks it
+  // forever, since the instance row never records a volume name to clean up
+  // later (the row is only updated with it once this function returns).
+  try {
+    const portKey = `${manifest.containerPort}/tcp`;
+    const container = await docker.createContainer({
+      name: `wharf-${instanceId}`,
+      Image: image,
+      Env: Object.entries(manifest.env(secrets)).map(([k, v]) => `${k}=${v}`),
+      Cmd: manifest.command ? manifest.command(secrets) : undefined,
+      ExposedPorts: { [portKey]: {} },
+      Labels: { "wharf.instance": instanceId, "wharf.engine": manifest.id },
+      HostConfig: {
+        PortBindings: { [portKey]: [{ HostPort: "" }] },
+        Binds: [`${volumeName}:${manifest.dataPath}`],
+        RestartPolicy: { Name: "unless-stopped" },
+        NanoCpus: Math.round(parseFloat(manifest.resourceDefaults.cpu) * 1e9),
+        Memory: manifest.resourceDefaults.memoryMb * 1024 * 1024,
+      },
+    });
 
-  await container.start();
-  const inspect = await container.inspect();
-  const bindings = inspect.NetworkSettings.Ports[portKey];
-  const hostPort = Number(bindings?.[0]?.HostPort);
-  if (!hostPort) {
-    throw new Error("container started but no host port was bound");
+    try {
+      await container.start();
+      const inspect = await container.inspect();
+      const bindings = inspect.NetworkSettings.Ports[portKey];
+      const hostPort = Number(bindings?.[0]?.HostPort);
+      if (!hostPort) {
+        throw new Error("container started but no host port was bound");
+      }
+      return { containerId: container.id, volumeName, hostPort };
+    } catch (err) {
+      await container.remove({ force: true }).catch(() => undefined);
+      throw err;
+    }
+  } catch (err) {
+    await docker.getVolume(volumeName).remove().catch(() => undefined);
+    throw err;
   }
-
-  return { containerId: container.id, volumeName, hostPort };
 }
 
 export async function waitForPort(host: string, port: number, timeoutMs = 45000): Promise<boolean> {

@@ -4,7 +4,7 @@
 
 Open source. Self-host it on your own infrastructure or point it at a Docker daemon anywhere. Every instance adapts to who's looking at it: a **Simple** view (connection URL, `.env` snippet, browse button) by default, an **Advanced** view (metrics, logs, config, backups) one click away — same instance, not two products.
 
-Phase 1 ships **PostgreSQL and MongoDB**. See [`PLAN.md`](./PLAN.md) for the full product plan, the competitive reasoning behind the scope, and an honest go/no-go assessment.
+Ships **PostgreSQL, MongoDB, MySQL, and Redis**. See [`PLAN.md`](./PLAN.md) for the full product plan, the competitive reasoning behind the scope, and an honest go/no-go assessment.
 
 > This repo was previously named `alldb`; the product is now called **Wharf**. The git repository name is unchanged.
 
@@ -60,4 +60,4 @@ PLAN.md          product plan, competitive reasoning, roadmap, honest scoring
 
 ## Status
 
-Phase 1 (Postgres + MongoDB, single Docker driver, no auth beyond an optional shared token, vertical-scaling-only) — working end to end: create, connect, browse, run queries, live metrics, logs, backup/restore. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, multi-user auth. See `PLAN.md` §13–14 for what's deliberately deferred and why.
+Postgres, MongoDB, MySQL, and Redis, single Docker driver, no auth beyond an optional shared token, vertical-scaling-only — working end to end: create, connect, browse, run queries, live metrics, logs. Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Backup/restore works for every engine except Redis (no clean stdin-restore path for an RDB dump — see `PLAN.md` §6.2a). Not yet built: Kubernetes driver, MCP/AI-agent server, billing, multi-user auth. See `PLAN.md` §13–14 for what's deliberately deferred and why.

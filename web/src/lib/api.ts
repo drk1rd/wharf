@@ -37,6 +37,7 @@ export interface Instance {
   error: string | null;
   resources: { cpu: string; memoryMb: number; diskGb: number };
   connection: { host: string; port: number; connectionString: string } | null;
+  backupSupported: boolean;
 }
 
 export interface ContainerStats {

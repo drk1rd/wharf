@@ -7,6 +7,44 @@ import { useConfirm } from "../components/ConfirmDialog";
 
 type Tab = "simple" | "advanced";
 
+function envVarFor(engine: string): string {
+  switch (engine) {
+    case "postgres":
+    case "mysql":
+      return "DATABASE_URL";
+    case "mongodb":
+      return "MONGODB_URI";
+    case "redis":
+      return "REDIS_URL";
+    default:
+      return "DATABASE_URL";
+  }
+}
+
+function queryRunnerLabel(engine: string): string {
+  switch (engine) {
+    case "postgres":
+    case "mysql":
+      return "Run SQL";
+    case "redis":
+      return "Run a command";
+    default:
+      return "Run a query";
+  }
+}
+
+function queryRunnerPlaceholder(engine: string): string {
+  switch (engine) {
+    case "postgres":
+    case "mysql":
+      return "select * from my_table limit 50;";
+    case "redis":
+      return "GET my_key";
+    default:
+      return '{"collection": "users", "filter": {}}';
+  }
+}
+
 export default function InstancePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -133,11 +171,14 @@ function AskPanel({ instance }: { instance: Instance }) {
   }
 
   if (enabled === null) return null;
+  const supported = instance.engine !== "redis";
 
   return (
     <section className="panel">
       <h2>Ask your data</h2>
-      {!enabled ? (
+      {!supported ? (
+        <p className="empty">Not available for key-value stores yet — a single generated command doesn't map cleanly to an arbitrary question.</p>
+      ) : !enabled ? (
         <p className="empty">
           Set <code>ANTHROPIC_API_KEY</code> on the control plane to ask questions in plain English instead of writing queries by hand.
         </p>
@@ -172,7 +213,7 @@ function ConnectPanel({ instance }: { instance: Instance }) {
   const conn = instance.connection;
   const [revealed, setRevealed] = useState(false);
   if (!conn) return null;
-  const envVar = instance.engine === "postgres" ? "DATABASE_URL" : "MONGODB_URI";
+  const envVar = envVarFor(instance.engine);
   const masked = conn.connectionString.replace(/:([^:@/]+)@/, ":••••••••@");
   const display = revealed ? conn.connectionString : masked;
   const envSnippet = `${envVar}=${display}`;
@@ -220,7 +261,8 @@ function BrowsePanel({ instance }: { instance: Instance }) {
   const [queryText, setQueryText] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [running, setRunning] = useState(false);
-  const label = instance.engine === "mongodb" ? "Collections" : "Tables";
+  const label = instance.engine === "mongodb" ? "Collections" : instance.engine === "redis" ? "Keys" : "Tables";
+  const singular = instance.engine === "mongodb" ? "collection" : instance.engine === "redis" ? "key" : "table";
 
   useEffect(() => {
     api.listObjects(instance.id).then(setObjects).catch(() => setObjects([]));
@@ -268,17 +310,17 @@ function BrowsePanel({ instance }: { instance: Instance }) {
           {rows ? (
             <ResultTable result={rows} />
           ) : (
-            <p className="empty">Select a {instance.engine === "mongodb" ? "collection" : "table"} to view its rows.</p>
+            <p className="empty">Select a {singular} to view its {instance.engine === "redis" ? "value" : "rows"}.</p>
           )}
         </div>
       </div>
 
       <div className="query-runner">
-        <h3>{instance.engine === "postgres" ? "Run SQL" : "Run a query"}</h3>
+        <h3>{queryRunnerLabel(instance.engine)}</h3>
         <textarea
           value={queryText}
           onChange={(e) => setQueryText(e.target.value)}
-          placeholder={instance.engine === "postgres" ? "select * from my_table limit 50;" : '{"collection": "users", "filter": {}}'}
+          placeholder={queryRunnerPlaceholder(instance.engine)}
           rows={4}
         />
         <button className="primary" onClick={runQuery} disabled={running || !queryText.trim()}>
@@ -441,11 +483,15 @@ function AdvancedView({ instance }: { instance: Instance }) {
       <section className="panel">
         <div className="panel-head">
           <h2>Backups</h2>
-          <button className="primary" onClick={handleBackup} disabled={busy}>
-            {busy ? "Working…" : "Create backup now"}
-          </button>
+          {instance.backupSupported && (
+            <button className="primary" onClick={handleBackup} disabled={busy}>
+              {busy ? "Working…" : "Create backup now"}
+            </button>
+          )}
         </div>
-        {backups.length === 0 ? (
+        {!instance.backupSupported ? (
+          <p className="empty">Backup/restore isn't supported for {instance.engine} yet.</p>
+        ) : backups.length === 0 ? (
           <p className="empty">No backups yet.</p>
         ) : (
           <table className="instance-table">

@@ -76,8 +76,9 @@ browseRouter.post("/instances/:id/ask", async (req, res) => {
     }
 
     const { adapter, connectionString, engine } = adapterFor(req.params.id);
-    if (engine !== "postgres" && engine !== "mongodb") {
-      throw new Error(`ask-your-data is not supported for engine: ${engine}`);
+    if (engine !== "postgres" && engine !== "mongodb" && engine !== "mysql") {
+      res.status(400).json({ error: `ask-your-data isn't available for ${engine} yet — key-value stores don't map cleanly to a single generated query` });
+      return;
     }
 
     const schemaContext = await adapter.getSchemaContext(connectionString);
