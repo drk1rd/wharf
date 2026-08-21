@@ -1,10 +1,10 @@
 import { Router, type Response } from "express";
-import { instancesRepo } from "../db.js";
+import { instancesRepo, type InstanceRow } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
 import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
 import { backupSupported, createBackup, getBackupSchedule, listBackups, restoreBackup, setBackupSchedule } from "../backups.js";
-import { ownerIdFor } from "../auth.js";
+import { listApiTokens, mintApiToken, ownerIdFor, requireWriteAccess, revokeApiToken } from "../auth.js";
 
 export const instancesRouter = Router();
 
@@ -54,11 +54,22 @@ instancesRouter.get("/engines", (_req, res) => {
 
 instancesRouter.get("/instances", (req, res) => {
   const auth = req.auth!;
-  const rows = auth.kind === "user" ? instancesRepo.listForOwner(auth.userId) : instancesRepo.list();
+  // A scoped token only ever sees the one instance it's bound to — never
+  // the full list a "list all" call would otherwise return.
+  const rows: InstanceRow[] =
+    auth.kind === "user"
+      ? instancesRepo.listForOwner(auth.userId)
+      : auth.kind === "scoped"
+        ? [instancesRepo.get(auth.instanceId)].filter((r): r is InstanceRow => Boolean(r))
+        : instancesRepo.list();
   res.json(rows.map(publicInstance));
 });
 
 instancesRouter.post("/instances", async (req, res) => {
+  if (req.auth!.kind === "scoped") {
+    res.status(403).json({ error: "a scoped token can't create new instances — it's bound to the one it was minted for" });
+    return;
+  }
   const { name, engine, version } = req.body ?? {};
   if (typeof engine !== "string") {
     res.status(400).json({ error: "engine is required" });
@@ -89,6 +100,7 @@ instancesRouter.get("/instances/:id", (req, res) => {
 
 instancesRouter.delete("/instances/:id", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     await deleteInstance(req.params.id, req.auth!);
     res.status(204).end();
   } catch (err) {
@@ -98,6 +110,7 @@ instancesRouter.delete("/instances/:id", async (req, res) => {
 
 instancesRouter.patch("/instances/:id/resize", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     const { cpu, memoryMb } = req.body ?? {};
     if (cpu !== undefined && typeof cpu !== "string") {
       res.status(400).json({ error: "cpu must be a string like \"1\" or \"0.5\"" });
@@ -137,6 +150,7 @@ instancesRouter.get("/instances/:id/logs", async (req, res) => {
 
 instancesRouter.post("/instances/:id/backups", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     const row = requireRunningInstance(req.params.id, req.auth!);
     const backup = await createBackup(row);
     res.status(201).json(backup);
@@ -156,6 +170,7 @@ instancesRouter.get("/instances/:id/backups", (req, res) => {
 
 instancesRouter.patch("/instances/:id/backup-schedule", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     requireOwnedInstance(req.params.id, req.auth!);
     const { intervalHours, retentionCount } = req.body ?? {};
     if (intervalHours !== null && typeof intervalHours !== "number") {
@@ -175,6 +190,7 @@ instancesRouter.patch("/instances/:id/backup-schedule", async (req, res) => {
 
 instancesRouter.post("/instances/:id/restore", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     const row = requireRunningInstance(req.params.id, req.auth!);
     const { backupId } = req.body ?? {};
     if (typeof backupId !== "string") {
@@ -182,6 +198,72 @@ instancesRouter.post("/instances/:id/restore", async (req, res) => {
       return;
     }
     await restoreBackup(row, backupId);
+    res.status(204).end();
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+// Token minting/listing/revocation is deliberately unavailable to a scoped
+// token itself — requireOwnedInstance lets it through (it can access its own
+// instance), so each handler below checks `kind === "scoped"` explicitly: a
+// leaked read-only token must never be usable to mint itself a replacement.
+instancesRouter.post("/instances/:id/tokens", (req, res) => {
+  try {
+    const row = requireOwnedInstance(req.params.id, req.auth!);
+    if (req.auth!.kind === "scoped") {
+      res.status(403).json({ error: "a scoped token can't mint another token" });
+      return;
+    }
+    const { scope, name } = req.body ?? {};
+    if (scope !== "read" && scope !== "write") {
+      res.status(400).json({ error: 'scope must be "read" or "write"' });
+      return;
+    }
+    const { token, row: tokenRow } = mintApiToken(row.id, scope, typeof name === "string" && name.trim() ? name.trim() : null);
+    res.status(201).json({
+      // The only time the plaintext token is ever returned — only its hash
+      // is stored, so this response is the caller's one chance to see it.
+      token,
+      id: tokenRow.id,
+      scope: tokenRow.scope,
+      name: tokenRow.name,
+      createdAt: tokenRow.created_at,
+    });
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+instancesRouter.get("/instances/:id/tokens", (req, res) => {
+  try {
+    requireOwnedInstance(req.params.id, req.auth!);
+    if (req.auth!.kind === "scoped") {
+      res.status(403).json({ error: "a scoped token can't list tokens for its own instance" });
+      return;
+    }
+    res.json(
+      listApiTokens(req.params.id).map((t) => ({
+        id: t.id,
+        scope: t.scope,
+        name: t.name,
+        createdAt: t.created_at,
+        lastUsedAt: t.last_used_at,
+      }))
+    );
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+instancesRouter.delete("/instances/:id/tokens/:tokenId", (req, res) => {
+  try {
+    requireOwnedInstance(req.params.id, req.auth!);
+    if (req.auth!.kind === "scoped") {
+      res.status(403).json({ error: "a scoped token can't revoke tokens for its own instance" });
+      return;
+    }
+    revokeApiToken(req.params.tokenId, req.params.id);
     res.status(204).end();
   } catch (err) {
     respondError(res, err);

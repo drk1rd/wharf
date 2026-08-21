@@ -482,6 +482,26 @@ button.ghost {
   white-space: nowrap;
 }
 
+.minted-token {
+  background: var(--panel-2);
+  border: 1px solid var(--accent, var(--border));
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.minted-token label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.minted-token .copy-row {
+  margin-bottom: 8px;
+}
+
 .snippet-head {
   display: flex;
   justify-content: space-between;

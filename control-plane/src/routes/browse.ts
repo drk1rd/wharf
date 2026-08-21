@@ -5,7 +5,7 @@ import { getManifest } from "../manifests/registry.js";
 import { askEnabled, generateQuery, listModels } from "../ask.js";
 import { usersRepo } from "../db.js";
 import { parseCsv, parseJsonRows } from "../import.js";
-import type { AuthContext } from "../auth.js";
+import { requireWriteAccess, type AuthContext } from "../auth.js";
 
 export const browseRouter = Router();
 
@@ -49,6 +49,11 @@ browseRouter.get("/instances/:id/browse/objects/:name/rows", async (req, res) =>
 
 browseRouter.post("/instances/:id/browse/query", async (req, res) => {
   try {
+    // Raw query text can't be safely classified read-vs-write across 5
+    // different engines' syntaxes, so a read-scoped token doesn't get this
+    // endpoint at all — it gets the structured read paths (objects/rows)
+    // and ask-your-data (already read-only by construction) instead.
+    requireWriteAccess(req.auth!);
     const { adapter, connectionString } = adapterFor(req.params.id, req.auth!);
     const { query } = req.body ?? {};
     if (typeof query !== "string" || !query.trim()) {
@@ -64,6 +69,7 @@ browseRouter.post("/instances/:id/browse/query", async (req, res) => {
 
 browseRouter.post("/instances/:id/browse/import", async (req, res) => {
   try {
+    requireWriteAccess(req.auth!);
     const { adapter, connectionString, engine } = adapterFor(req.params.id, req.auth!);
     if (!adapter.importRows) {
       res.status(400).json({ error: `import isn't supported for ${engine} yet` });

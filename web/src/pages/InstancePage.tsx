@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
+import { api, type ApiToken, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
 import { downloadResultAsCsv, downloadResultAsJson } from "../lib/export";
 import { useToast } from "../components/Toast";
@@ -604,6 +604,15 @@ function AdvancedView({ instance }: { instance: Instance }) {
   const [intervalInput, setIntervalInput] = useState(String(instance.backupSchedule?.intervalHours ?? 24));
   const [retentionInput, setRetentionInput] = useState(String(instance.backupSchedule?.retentionCount ?? 7));
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [tokens, setTokens] = useState<ApiToken[]>([]);
+  const [tokenName, setTokenName] = useState("");
+  const [tokenScope, setTokenScope] = useState<"read" | "write">("read");
+  const [minting, setMinting] = useState(false);
+  const [justMinted, setJustMinted] = useState<string | null>(null);
+
+  const refreshTokens = useCallback(() => {
+    api.listTokens(instance.id).then(setTokens).catch(() => undefined);
+  }, [instance.id]);
 
   const refreshBackups = useCallback(() => {
     api.listBackups(instance.id).then(setBackups).catch(() => undefined);
@@ -628,9 +637,10 @@ function AdvancedView({ instance }: { instance: Instance }) {
     };
     poll();
     refreshBackups();
+    refreshTokens();
     const interval = setInterval(poll, 4000);
     return () => clearInterval(interval);
-  }, [instance.id, refreshBackups]);
+  }, [instance.id, refreshBackups, refreshTokens]);
 
   async function handleResize() {
     setResizing(true);
@@ -680,6 +690,37 @@ function AdvancedView({ instance }: { instance: Instance }) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setSavingSchedule(false);
+    }
+  }
+
+  async function handleMintToken() {
+    setMinting(true);
+    try {
+      const result = await api.mintToken(instance.id, tokenScope, tokenName.trim());
+      setJustMinted(result.token);
+      setTokenName("");
+      refreshTokens();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setMinting(false);
+    }
+  }
+
+  async function handleRevokeToken(tokenId: string) {
+    const ok = await confirmDialog({
+      title: "Revoke this token?",
+      description: "Anything using it will immediately lose access to this instance.",
+      confirmLabel: "Revoke",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.revokeToken(instance.id, tokenId);
+      refreshTokens();
+      toast.push("Token revoked.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
     }
   }
 
@@ -821,6 +862,79 @@ function AdvancedView({ instance }: { instance: Instance }) {
                   <td>
                     <button onClick={() => handleRestore(b.id)} disabled={busy}>
                       Restore
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>API tokens</h2>
+        <p className="empty">
+          Scoped to this instance only — a "read" token can view data but not run queries, resize, back up, restore, or delete; a
+          "write" token can do everything to this instance except create new instances or manage its own tokens.
+        </p>
+        {justMinted && (
+          <div className="minted-token">
+            <label>New token — copy it now, it won't be shown again</label>
+            <div className="copy-row">
+              <code>{justMinted}</code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(justMinted);
+                  toast.push("Copied.", "success");
+                }}
+              >
+                Copy
+              </button>
+            </div>
+            <button className="ghost" onClick={() => setJustMinted(null)}>
+              Dismiss
+            </button>
+          </div>
+        )}
+        <div className="schedule-row">
+          <label>
+            Scope
+            <select value={tokenScope} onChange={(e) => setTokenScope(e.target.value as "read" | "write")} disabled={minting}>
+              <option value="read">Read</option>
+              <option value="write">Write</option>
+            </select>
+          </label>
+          <label>
+            Name (optional)
+            <input type="text" value={tokenName} onChange={(e) => setTokenName(e.target.value)} disabled={minting} placeholder="e.g. ci" />
+          </label>
+          <button onClick={handleMintToken} disabled={minting}>
+            {minting ? "Creating…" : "Create token"}
+          </button>
+        </div>
+        {tokens.length === 0 ? (
+          <p className="empty">No tokens yet.</p>
+        ) : (
+          <table className="instance-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Scope</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {tokens.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.name ?? <span className="empty">(unnamed)</span>}</td>
+                  <td>{t.scope}</td>
+                  <td>{new Date(t.createdAt).toLocaleString()}</td>
+                  <td>{t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString() : "never"}</td>
+                  <td>
+                    <button className="ghost" onClick={() => handleRevokeToken(t.id)}>
+                      Revoke
                     </button>
                   </td>
                 </tr>

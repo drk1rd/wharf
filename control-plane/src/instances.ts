@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { instancesRepo, type InstanceRow } from "./db.js";
+import { instancesRepo, apiTokensRepo, type InstanceRow } from "./db.js";
 import { getManifest } from "./manifests/registry.js";
 import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
 import { createInstanceContainer, stopAndRemoveContainer, updateContainerResources, waitForPort } from "./docker.js";
@@ -210,6 +210,7 @@ export async function deleteInstance(id: string, auth: AuthContext): Promise<boo
     await stopAndRemoveContainer(row.container_id, row.volume_name ?? undefined);
   }
   await deleteBackupsForInstance(id);
+  apiTokensRepo.removeForInstance(id);
   instancesRepo.remove(id);
   return true;
 }

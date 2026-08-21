@@ -63,6 +63,8 @@ node cli/bin/wharf.js rm <instance-id>
 
 The CLI authenticates as the admin/service account via `WHARF_TOKEN` (`WHARF_API_URL`, default `http://localhost:8080`) — it doesn't have a login flow of its own, and always sees every instance regardless of which user account created it.
 
+**Scoped tokens.** Any instance's Advanced view can mint a token bound to just that one instance — read-only (view data, no queries/resize/backup/restore/delete) or read-write (everything except creating instances or managing its own tokens). It's a normal `x-wharf-token` value, so `WHARF_TOKEN=<scoped token> node cli/bin/wharf.js ...` gets the CLI a narrower, single-instance credential with no code changes — useful for CI or a script that should only ever touch one database.
+
 ## Repository layout
 
 ```

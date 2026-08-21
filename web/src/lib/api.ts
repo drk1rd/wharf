@@ -44,6 +44,14 @@ export interface Instance {
   backupSchedule: { intervalHours: number; retentionCount: number; lastRunAt: string | null } | null;
 }
 
+export interface ApiToken {
+  id: string;
+  scope: "read" | "write";
+  name: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export interface ContainerStats {
   cpuPercent: number;
   memUsageBytes: number;
@@ -139,4 +147,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ intervalHours, retentionCount }),
     }),
+  listTokens: (id: string) => request<ApiToken[]>(`/instances/${id}/tokens`),
+  mintToken: (id: string, scope: "read" | "write", name: string) =>
+    request<ApiToken & { token: string }>(`/instances/${id}/tokens`, {
+      method: "POST",
+      body: JSON.stringify({ scope, name: name || undefined }),
+    }),
+  revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
 };

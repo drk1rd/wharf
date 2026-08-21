@@ -61,6 +61,17 @@ CREATE TABLE IF NOT EXISTS backup_schedules (
   last_run_at TEXT,
   FOREIGN KEY (instance_id) REFERENCES instances(id)
 );
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  instance_id TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scope TEXT NOT NULL,
+  name TEXT,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT,
+  FOREIGN KEY (instance_id) REFERENCES instances(id)
+);
 `);
 
 // owner_id was added after instances first shipped — add it for anyone
@@ -118,6 +129,16 @@ export interface BackupScheduleRow {
   interval_hours: number;
   retention_count: number;
   last_run_at: string | null;
+}
+
+export interface ApiTokenRow {
+  id: string;
+  instance_id: string;
+  token_hash: string;
+  scope: "read" | "write";
+  name: string | null;
+  created_at: string;
+  last_used_at: string | null;
 }
 
 export const usersRepo = {
@@ -234,5 +255,30 @@ export const backupSchedulesRepo = {
   },
   remove(instanceId: string) {
     db.prepare(`DELETE FROM backup_schedules WHERE instance_id = ?`).run(instanceId);
+  },
+};
+
+export const apiTokensRepo = {
+  insert(row: ApiTokenRow) {
+    db.prepare(
+      `INSERT INTO api_tokens (id, instance_id, token_hash, scope, name, created_at, last_used_at)
+       VALUES (@id, @instance_id, @token_hash, @scope, @name, @created_at, @last_used_at)`
+    ).run(row);
+  },
+  getByHash(tokenHash: string): ApiTokenRow | undefined {
+    return db.prepare(`SELECT * FROM api_tokens WHERE token_hash = ?`).get(tokenHash) as ApiTokenRow | undefined;
+  },
+  listForInstance(instanceId: string): ApiTokenRow[] {
+    return db.prepare(`SELECT * FROM api_tokens WHERE instance_id = ? ORDER BY created_at DESC`).all(instanceId) as ApiTokenRow[];
+  },
+  touch(id: string, lastUsedAt: string) {
+    db.prepare(`UPDATE api_tokens SET last_used_at = ? WHERE id = ?`).run(lastUsedAt, id);
+  },
+  /** Scoped to instanceId too, so a token ID for a different instance can't be revoked through this path. */
+  remove(id: string, instanceId: string) {
+    db.prepare(`DELETE FROM api_tokens WHERE id = ? AND instance_id = ?`).run(id, instanceId);
+  },
+  removeForInstance(instanceId: string) {
+    db.prepare(`DELETE FROM api_tokens WHERE instance_id = ?`).run(instanceId);
   },
 };
