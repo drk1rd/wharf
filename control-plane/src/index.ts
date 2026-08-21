@@ -1,6 +1,8 @@
 import "dotenv/config";
 import { buildApp } from "./app.js";
 import { runDueBackups } from "./backups.js";
+import { checkResourceAlerts } from "./alerts.js";
+import { getContainerStats } from "./docker.js";
 import { instancesRepo } from "./db.js";
 
 const app = buildApp();
@@ -18,4 +20,5 @@ app.listen(port, () => {
 const schedulerIntervalMs = Number(process.env.WHARF_SCHEDULER_INTERVAL_MS ?? 60_000);
 setInterval(() => {
   void runDueBackups((id) => instancesRepo.get(id));
+  void checkResourceAlerts(instancesRepo.list(), getContainerStats);
 }, schedulerIntervalMs).unref();

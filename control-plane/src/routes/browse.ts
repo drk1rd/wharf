@@ -7,6 +7,7 @@ import { usersRepo } from "../db.js";
 import { parseCsv, parseJsonRows } from "../import.js";
 import { requireWriteAccess, type AuthContext } from "../auth.js";
 import { recordAudit } from "../audit.js";
+import { alertSlowQuery } from "../alerts.js";
 
 export const browseRouter = Router();
 
@@ -16,7 +17,7 @@ function adapterFor(instanceId: string, auth: AuthContext) {
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
   const connectionString = internalConnectionString(row);
   if (!connectionString) throw new Error("instance has no connection info yet");
-  return { adapter: getBrowserAdapter(manifest.browserAdapter), connectionString, engine: row.engine };
+  return { adapter: getBrowserAdapter(manifest.browserAdapter), connectionString, engine: row.engine, name: row.name };
 }
 
 browseRouter.get("/instances/:id/browse/objects", async (req, res) => {
@@ -55,14 +56,17 @@ browseRouter.post("/instances/:id/browse/query", async (req, res) => {
     // endpoint at all — it gets the structured read paths (objects/rows)
     // and ask-your-data (already read-only by construction) instead.
     requireWriteAccess(req.auth!);
-    const { adapter, connectionString } = adapterFor(req.params.id, req.auth!);
+    const { adapter, connectionString, name } = adapterFor(req.params.id, req.auth!);
     const { query } = req.body ?? {};
     if (typeof query !== "string" || !query.trim()) {
       res.status(400).json({ error: "query is required" });
       return;
     }
+    const startedAt = Date.now();
     const result = await adapter.runQuery(connectionString, query);
+    const durationMs = Date.now() - startedAt;
     recordAudit(req.params.id, req.auth!, "query", query.length > 200 ? `${query.slice(0, 200)}…` : query);
+    void alertSlowQuery(req.params.id, name, durationMs, query);
     res.json(result);
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 500;

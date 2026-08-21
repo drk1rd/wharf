@@ -31,6 +31,14 @@ services:
       # Set to "true" once Wharf is served over HTTPS (e.g. behind a tunnel) so
       # session cookies get the Secure flag. Leave false for plain-HTTP local use.
       WHARF_COOKIE_SECURE: ${WHARF_COOKIE_SECURE:-false}
+      # Optional: a URL to POST a JSON payload to when an instance's cpu/memory
+      # usage crosses a threshold (checked once per scheduler tick, alongside
+      # scheduled backups) or a query runs longer than WHARF_ALERT_SLOW_QUERY_MS
+      # (default 5000). Off entirely unless set. Thresholds/cooldown are each
+      # independently overridable: WHARF_ALERT_CPU_THRESHOLD_PERCENT,
+      # WHARF_ALERT_MEMORY_THRESHOLD_PERCENT (both default 90),
+      # WHARF_ALERT_COOLDOWN_MINUTES (default 30, per instance per alert type).
+      WHARF_ALERT_WEBHOOK_URL: ${WHARF_ALERT_WEBHOOK_URL:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
