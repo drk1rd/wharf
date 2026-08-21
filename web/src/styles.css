@@ -1,74 +1,80 @@
 /*
- * Palette extends the landing page's identity (landing/index.html) into the
- * product itself: ink-navy base, an amber "beacon" accent and teal "channel
- * marker" secondary, replacing the generic blue-on-grey default every other
- * dashboard template also reaches for. Light mode is a warm paper tone, not
- * plain cool grey, with the same accents darkened for contrast — a genuine
- * second theme, not a naive inversion of the dark one.
+ * Second pass, deliberately overriding the first: the warm-paper/serif-
+ * display look (cream background, Fraunces headings, soft wide shadows,
+ * generous radii) read as consumer/editorial, not the tight, neutral,
+ * information-dense look actual B2B SaaS dashboards (Linear, Vercel,
+ * Stripe's own dashboard, Supabase) share — cool neutral grays instead of
+ * a warm tint, one crisp sans in every weight instead of a second display
+ * face, small tight radii instead of soft-app-icon rounding, thin precise
+ * shadows instead of big soft glows. The amber "beacon" accent stays —
+ * it's the one piece of Wharf's identity worth keeping — but punched up
+ * to read as a precise signal color instead of a muted brown, and used
+ * sparingly (primary actions, active states) rather than as a color
+ * families cascading through soft glows and heroic bold clovertones.
  */
 :root {
-  --bg: #f7f4ec;
+  --bg: #f7f8fa;
   --bg-raised: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f1ece0;
-  --border: #e3dcc9;
-  --text: #1a1f2c;
-  --muted: #5c6270;
-  --accent: #b9762a;
+  --panel-2: #f1f3f6;
+  --border: #e1e4ea;
+  --text: #0f1524;
+  --muted: #66707e;
+  --accent: #d97706;
   --accent-contrast: #ffffff;
-  --danger: #c4432e;
-  --danger-bg: rgba(196, 67, 46, 0.08);
-  --ok: #1f8f76;
-  --ok-bg: rgba(31, 143, 118, 0.1);
-  --warn: #a8791f;
-  --warn-bg: rgba(168, 121, 31, 0.12);
-  --shadow: 0 1px 2px rgba(20, 22, 27, 0.04), 0 8px 24px rgba(20, 22, 27, 0.06);
-  --radius-sm: 5px;
-  --radius: 8px;
-  --radius-lg: 10px;
-  --font-sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.08);
+  --ok: #0f9d78;
+  --ok-bg: rgba(15, 157, 120, 0.1);
+  --warn: #b45309;
+  --warn-bg: rgba(180, 83, 9, 0.1);
+  --shadow: 0 1px 2px rgba(15, 21, 36, 0.04), 0 2px 8px rgba(15, 21, 36, 0.05);
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font-sans: "Inter", "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  --font-display: "Fraunces", Georgia, "Iowan Old Style", serif;
+  --font-display: var(--font-sans);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0a0f1a;
-    --bg-raised: #121826;
-    --panel: #121826;
-    --panel-2: #0d1320;
-    --border: #262f47;
-    --text: #f2ede1;
-    --muted: #8b93a7;
-    --accent: #e8a33d;
-    --accent-contrast: #1a1206;
-    --danger: #ef7b62;
-    --danger-bg: rgba(239, 123, 98, 0.14);
-    --ok: #3fbfa6;
-    --ok-bg: rgba(63, 191, 166, 0.14);
-    --warn: #d9a441;
-    --warn-bg: rgba(217, 164, 65, 0.16);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --bg: #0a0e17;
+    --bg-raised: #12161f;
+    --panel: #12161f;
+    --panel-2: #171c28;
+    --border: #262c3a;
+    --text: #eef0f4;
+    --muted: #8a92a3;
+    --accent: #f0a030;
+    --accent-contrast: #14100a;
+    --danger: #f0685a;
+    --danger-bg: rgba(240, 104, 90, 0.14);
+    --ok: #33c493;
+    --ok-bg: rgba(51, 196, 147, 0.14);
+    --warn: #e0a53d;
+    --warn-bg: rgba(224, 165, 61, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.3);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0a0f1a;
-  --bg-raised: #121826;
-  --panel: #121826;
-  --panel-2: #0d1320;
-  --border: #262f47;
-  --text: #f2ede1;
-  --muted: #8b93a7;
-  --accent: #e8a33d;
-  --accent-contrast: #1a1206;
-  --danger: #ef7b62;
-  --danger-bg: rgba(239, 123, 98, 0.14);
-  --ok: #3fbfa6;
-  --ok-bg: rgba(63, 191, 166, 0.14);
-  --warn: #d9a441;
-  --warn-bg: rgba(217, 164, 65, 0.16);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --bg: #0a0e17;
+  --bg-raised: #12161f;
+  --panel: #12161f;
+  --panel-2: #171c28;
+  --border: #262c3a;
+  --text: #eef0f4;
+  --muted: #8a92a3;
+  --accent: #f0a030;
+  --accent-contrast: #14100a;
+  --danger: #f0685a;
+  --danger-bg: rgba(240, 104, 90, 0.14);
+  --ok: #33c493;
+  --ok-bg: rgba(51, 196, 147, 0.14);
+  --warn: #e0a53d;
+  --warn-bg: rgba(224, 165, 61, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -251,31 +257,32 @@ body {
 h1,
 h2,
 h3 {
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   margin: 0 0 4px;
 }
 
 h2 {
-  font-size: 15px;
+  font-size: 13px;
   color: var(--text);
   margin-bottom: 14px;
 }
 
 .hero {
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 
 .hero h1 {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 30px;
-  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
 }
 
 .hero p {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   margin: 0;
   max-width: 560px;
 }
@@ -321,30 +328,29 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 14px 16px;
   cursor: pointer;
   color: var(--text);
-  min-width: 170px;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  min-width: 160px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .engine-card:hover:not(:disabled) {
   border-color: var(--accent);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow);
 }
 
 .engine-card:disabled {
   opacity: 0.55;
   cursor: default;
-  transform: none;
 }
 
 .engine-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -492,9 +498,10 @@ h2 {
 
 .instance-header h1 {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0 0 4px;
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .sub {
@@ -519,17 +526,19 @@ h2 {
 
 button {
   font: inherit;
+  font-weight: 500;
+  font-size: 13px;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 14px;
+  padding: 7px 12px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  transition: border-color 0.12s ease, background 0.12s ease, opacity 0.12s ease;
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--muted);
 }
 
 button:disabled {
@@ -628,8 +637,8 @@ button.ghost {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 22px;
-  margin-bottom: 20px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow);
 }
 
@@ -1512,16 +1521,18 @@ input:focus-visible {
   align-items: center;
   gap: 8px;
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 19px;
-  color: var(--accent);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--text);
   margin-bottom: 20px;
 }
 
 .auth-card h1 {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 19px;
   margin-bottom: 4px;
 }
 
