@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --workspace control-plane
+
+      - name: Build
+        run: npm run build --workspace control-plane
+
+      - name: Test (includes real Postgres/MySQL/MongoDB/Redis containers)
+        run: npm test --workspace control-plane
+        env:
+          # GitHub-hosted ubuntu runners ship Docker pre-installed and running,
+          # so the integration tests in src/__tests__/engines.integration.test.ts
+          # create real containers here instead of skipping like they do in a
+          # network-restricted sandbox.
+          DOCKER_SOCKET: /var/run/docker.sock
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --workspace web
+
+      - name: Build
+        run: npm run build --workspace web

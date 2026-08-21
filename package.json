@@ -1,0 +1,39 @@
+{
+  "name": "wharf",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Wharf — spin up, browse, and connect to any database. One place, every engine.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/drk1rd/alldb#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drk1rd/alldb.git"
+  },
+  "bugs": {
+    "url": "https://github.com/drk1rd/alldb/issues"
+  },
+  "keywords": [
+    "database",
+    "postgresql",
+    "mongodb",
+    "mysql",
+    "redis",
+    "clickhouse",
+    "docker",
+    "self-hosted",
+    "database-hosting",
+    "database-browser"
+  ],
+  "workspaces": [
+    "control-plane",
+    "web",
+    "cli"
+  ],
+  "scripts": {
+    "dev:control-plane": "npm run dev --workspace control-plane",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace control-plane && npm run build --workspace web",
+    "typecheck": "npm run typecheck --workspace control-plane && npm run typecheck --workspace web",
+    "test": "npm run test --workspace control-plane"
+  }
+}
