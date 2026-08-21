@@ -58,13 +58,19 @@ npm run dev:web             # http://localhost:5173, proxies /api to :8080
 
 ```bash
 npm install --workspace cli
+node cli/bin/wharf.js signup            # first time on a fresh instance — becomes its superadmin
+node cli/bin/wharf.js login             # afterward, or on any other machine
 node cli/bin/wharf.js create postgres
 node cli/bin/wharf.js list
 node cli/bin/wharf.js url <instance-id>
 node cli/bin/wharf.js rm <instance-id>
+node cli/bin/wharf.js whoami
+node cli/bin/wharf.js logout
 ```
 
-The CLI authenticates as the admin/service account via `WHARF_TOKEN` (`WHARF_API_URL`, default `http://localhost:8080`) — it doesn't have a login flow of its own, and always sees every instance regardless of which user account created it.
+The CLI has a real login of its own — `wharf login`/`signup` authenticate as an actual account (email/password, prompted interactively with the password masked, or via `WHARF_EMAIL`/`WHARF_PASSWORD` for scripts) and store a session locally at `~/.wharf/sessions.json` (`0600`, keyed by `WHARF_API_URL` so logins to different Wharf instances don't collide). It sees exactly what that account would see in the web UI — a superadmin sees everything, a regular account sees its own instances.
+
+Setting `WHARF_TOKEN` still works exactly as before — an admin/service credential (`WHARF_API_URL`, default `http://localhost:8080`) that always sees every instance and takes precedence over any saved login session for as long as it's set, so CI/automation using `WHARF_TOKEN` is never silently affected by a session saved on that machine.
 
 **Scoped tokens.** Any instance's Advanced view can mint a token bound to just that one instance — read-only (view data, no queries/resize/backup/restore/delete) or read-write (everything except creating instances or managing its own tokens). It's a normal `x-wharf-token` value, so `WHARF_TOKEN=<scoped token> node cli/bin/wharf.js ...` gets the CLI a narrower, single-instance credential with no code changes — useful for CI or a script that should only ever touch one database.
 
@@ -88,8 +94,10 @@ Postgres, MongoDB, MySQL, Redis, and ClickHouse, single Docker driver — workin
 
 A further nine-feature round shipped on top of that (see `PLAN.md` §20 for the full write-up, including two real bugs CI found): sample data seeded into every fresh instance, framework connection snippets in the Connect panel, CSV/JSON import, scheduled/automated backups, scoped per-instance API tokens (read or read-write, bound to one instance), an audit log of every mutating action, resource/slow-query webhook alerting, database branching (instant clone via dump-and-restore into a fresh instance), and an auto-generated REST API per table (`GET/POST/PATCH/DELETE /instances/:id/api/:table`, Postgres/MySQL/ClickHouse) — plus an aggregate host-wide CPU/memory budget (`WHARF_MAX_TOTAL_CPU`/`WHARF_MAX_TOTAL_MEMORY_MB`) so live resize can't let every instance on a host overcommit it together.
 
-A real test suite and CI run on every push — real Postgres/MySQL/MongoDB/Redis/ClickHouse containers in CI, not mocks (see `PLAN.md` §18–20). Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts, CLI login. See `PLAN.md` §13–14 for what's deliberately deferred and why.
+A real test suite and CI run on every push — real Postgres/MySQL/MongoDB/Redis/ClickHouse containers in CI, not mocks (see `PLAN.md` §18–20). Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts. See `PLAN.md` §13–14 for what's deliberately deferred and why.
 
 The repo itself is publish-ready: a filled-in `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.env.example`, GitHub issue/PR templates, and a real `landing/` marketing page — see `PLAN.md` §21.
 
 There's no more anonymous-access bootstrap window: every fresh instance requires a mandatory first-boot **superadmin setup** step before anything else works, and that account gets full platform-wide management — every database regardless of owner, plus a Users panel (Settings) to promote, demote, or delete other accounts. See `PLAN.md` §22.
+
+The CLI has real login parity with the web UI now — `wharf login`/`signup`/`logout`/`whoami` against real accounts, not just the `WHARF_TOKEN` admin credential (which still works, and still takes precedence over a saved session when set). See `PLAN.md` §23.
