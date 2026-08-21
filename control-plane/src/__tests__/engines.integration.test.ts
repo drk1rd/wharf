@@ -359,4 +359,49 @@ test("clickhouse: create, connect, browse, query, backup and restore round-trip"
   await client.delete(`/api/instances/${instance.id}`);
 });
 
+test("TLS: postgres/mysql/mongodb provision, are queryable, and hand out a TLS-flagged connection string", { skip, timeout: 240_000 }, async () => {
+  const ca = await client.get("/api/tls/ca-certificate");
+  assert.equal(ca.status, 200);
+  assert.ok(String(ca.body).includes("BEGIN CERTIFICATE"), "CA endpoint should return a PEM certificate");
+
+  const pg = await client.post("/api/instances", { engine: "postgres", tls: true });
+  assert.equal(pg.status, 201);
+  const pgSettled = await waitForStatus(pg.body.id);
+  assert.equal(pgSettled.status, "running", `TLS postgres should reach running (error: ${pgSettled.error})`);
+  assert.equal(pgSettled.tlsEnabled, true);
+  assert.ok(pgSettled.connection.connectionString.includes("sslmode=require"), pgSettled.connection.connectionString);
+  const pgQuery = await client.post(`/api/instances/${pg.body.id}/browse/query`, { query: "SELECT 1 AS one" });
+  assert.equal(pgQuery.status, 200, JSON.stringify(pgQuery.body));
+  assert.equal(Number(pgQuery.body.rows[0].one), 1);
+  await client.delete(`/api/instances/${pg.body.id}`);
+
+  const mysqlRes = await client.post("/api/instances", { engine: "mysql", tls: true });
+  assert.equal(mysqlRes.status, 201);
+  const mysqlSettled = await waitForStatus(mysqlRes.body.id);
+  assert.equal(mysqlSettled.status, "running", `TLS mysql should reach running (error: ${mysqlSettled.error})`);
+  assert.ok(mysqlSettled.connection.connectionString.includes("ssl=true"), mysqlSettled.connection.connectionString);
+  const mysqlQuery = await client.post(`/api/instances/${mysqlRes.body.id}/browse/query`, { query: "SELECT 1 AS one" });
+  assert.equal(mysqlQuery.status, 200, JSON.stringify(mysqlQuery.body));
+  assert.equal(Number(mysqlQuery.body.rows[0].one), 1);
+  await client.delete(`/api/instances/${mysqlRes.body.id}`);
+
+  const mongoRes = await client.post("/api/instances", { engine: "mongodb", tls: true });
+  assert.equal(mongoRes.status, 201);
+  const mongoSettled = await waitForStatus(mongoRes.body.id);
+  assert.equal(mongoSettled.status, "running", `TLS mongodb should reach running (error: ${mongoSettled.error})`);
+  assert.ok(mongoSettled.connection.connectionString.includes("tls=true"), mongoSettled.connection.connectionString);
+  const mongoObjects = await client.get(`/api/instances/${mongoRes.body.id}/browse/objects`);
+  assert.equal(mongoObjects.status, 200, JSON.stringify(mongoObjects.body));
+  await client.delete(`/api/instances/${mongoRes.body.id}`);
+});
+
+test("TLS: an engine with no manifest.tls (redis) silently ignores tls: true rather than failing", { skip, timeout: 150_000 }, async () => {
+  const created = await client.post("/api/instances", { engine: "redis", tls: true });
+  assert.equal(created.status, 201);
+  const instance = await waitForStatus(created.body.id);
+  assert.equal(instance.status, "running");
+  assert.equal(instance.tlsEnabled, false, "redis has no tls support yet — the request is honored as a no-op, not an error");
+  await client.delete(`/api/instances/${created.body.id}`);
+});
+
 after(() => server.close());

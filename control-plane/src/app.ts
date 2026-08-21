@@ -7,6 +7,7 @@ import { instancesRouter } from "./routes/instances.js";
 import { browseRouter } from "./routes/browse.js";
 import { tableApiRouter } from "./routes/tableApi.js";
 import { adminRouter } from "./routes/admin.js";
+import { settingsRouter } from "./routes/settings.js";
 import { askEnabled } from "./ask.js";
 
 export function buildApp(): express.Express {
@@ -23,6 +24,7 @@ export function buildApp(): express.Express {
   });
 
   app.use("/api", authRouter);
+  app.use("/api", settingsRouter);
 
   app.use("/api", requireAuth, instancesRouter);
   app.use("/api", requireAuth, browseRouter);

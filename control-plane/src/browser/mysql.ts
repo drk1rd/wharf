@@ -42,7 +42,18 @@ function buildWhere(filters: BrowseFilter[] | undefined): { clause: string; para
 }
 
 async function withConnection<T>(connectionString: string, fn: (conn: mysql.Connection) => Promise<T>): Promise<T> {
-  const conn = await mysql.createConnection({ uri: connectionString, connectTimeout: 8000 });
+  // mysql2's own URI parsing doesn't reliably turn a query-string ssl flag
+  // into a real TLS options object, so this "?ssl=true" marker (set by
+  // manifests/mysql.ts's tls.internalConnectionSuffix) is read here instead
+  // and passed as an explicit sibling option — rejectUnauthorized: false
+  // because the leaf cert is signed by the deployment's own self-signed CA,
+  // not a public one.
+  const useTls = /[?&]ssl=true(?:&|$)/.test(connectionString);
+  const conn = await mysql.createConnection({
+    uri: connectionString,
+    connectTimeout: 8000,
+    ssl: useTls ? { rejectUnauthorized: false } : undefined,
+  });
   try {
     return await fn(conn);
   } finally {

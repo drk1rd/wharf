@@ -33,6 +33,7 @@ const instance = (() => {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;

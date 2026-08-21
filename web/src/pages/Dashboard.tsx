@@ -7,6 +7,13 @@ export default function Dashboard() {
   const [instances, setInstances] = useState<Instance[] | null>(null);
   const [engines, setEngines] = useState<Engine[]>([]);
   const [creating, setCreating] = useState<string | null>(null);
+  // One toggle for the whole card grid, not a per-engine option — TLS is a
+  // create-time-only choice anyway (see PLAN.md), so a single "use TLS for
+  // whatever I create next" switch stays true to the "not that complex"
+  // brief while still being overridable per click. Seeded from the
+  // deployment default set in Settings/the setup wizard; engines with no
+  // TLS support (Redis, ClickHouse) just ignore it.
+  const [tlsWanted, setTlsWanted] = useState(false);
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -20,6 +27,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     api.listEngines().then(setEngines).catch((err) => toast.push(err.message, "error"));
+    api.getDeploymentSettings().then((s) => setTlsWanted(s.defaultTls)).catch(() => undefined);
     refresh();
     const interval = setInterval(refresh, 3000);
     return () => clearInterval(interval);
@@ -29,7 +37,7 @@ export default function Dashboard() {
   async function handleCreate(engine: Engine) {
     setCreating(engine.id);
     try {
-      const instance = await api.createInstance(`${engine.id}-${Date.now()}`, engine.id, engine.defaultVersion);
+      const instance = await api.createInstance(`${engine.id}-${Date.now()}`, engine.id, engine.defaultVersion, tlsWanted);
       await refresh();
       navigate(`/instances/${instance.id}`);
     } catch (err) {
@@ -47,7 +55,13 @@ export default function Dashboard() {
       </div>
 
       <section className="section">
-        <h2>New database</h2>
+        <div className="section-heading-row">
+          <h2>New database</h2>
+          <label className="checkbox-row tls-toggle" title="Encrypt the connection with a certificate signed by this deployment's own CA. Not every engine supports it yet.">
+            <input type="checkbox" checked={tlsWanted} onChange={(e) => setTlsWanted(e.target.checked)} />
+            Use TLS
+          </label>
+        </div>
         <div className="engine-cards">
           {engines.length === 0
             ? [0, 1].map((i) => <div key={i} className="engine-card skeleton" style={{ height: 78 }} />)
@@ -59,7 +73,10 @@ export default function Dashboard() {
                   disabled={creating !== null}
                 >
                   <span className="engine-name">{engine.displayName}</span>
-                  <span className="engine-version">{/^\d/.test(engine.defaultVersion) ? `v${engine.defaultVersion}` : engine.defaultVersion}</span>
+                  <span className="engine-version">
+                    {/^\d/.test(engine.defaultVersion) ? `v${engine.defaultVersion}` : engine.defaultVersion}
+                    {tlsWanted && !engine.tlsSupported && <span className="engine-no-tls"> · no TLS yet</span>}
+                  </span>
                   <span className="engine-cta">
                     {creating === engine.id ? (
                       <>

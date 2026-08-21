@@ -28,6 +28,7 @@ export interface Engine {
   displayName: string;
   versions: string[];
   defaultVersion: string;
+  tlsSupported: boolean;
 }
 
 export interface Instance {
@@ -41,8 +42,16 @@ export interface Instance {
   error: string | null;
   resources: { cpu: string; memoryMb: number; diskGb: number };
   connection: { host: string; port: number; connectionString: string } | null;
+  tlsEnabled: boolean;
   backupSupported: boolean;
   backupSchedule: { intervalHours: number; retentionCount: number; lastRunAt: string | null } | null;
+}
+
+export interface DeploymentSettings {
+  publicHost: string | null;
+  hostKind: "ip" | "domain";
+  defaultTls: boolean;
+  publicHostLockedByEnv: boolean;
 }
 
 export interface AuditLogEntry {
@@ -126,6 +135,9 @@ export interface OpenRouterModel {
 
 export const api = {
   getConfig: () => request<{ askEnabled: boolean; needsSetup: boolean }>("/config"),
+  getDeploymentSettings: () => request<DeploymentSettings>("/deployment-settings"),
+  updateDeploymentSettings: (patch: { publicHost?: string; hostKind?: "ip" | "domain"; defaultTls?: boolean }) =>
+    request<DeploymentSettings>("/deployment-settings", { method: "PATCH", body: JSON.stringify(patch) }),
   signup: (email: string, password: string) =>
     request<User>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
@@ -139,8 +151,9 @@ export const api = {
   listEngines: () => request<Engine[]>("/engines"),
   listInstances: () => request<Instance[]>("/instances"),
   getInstance: (id: string) => request<Instance>(`/instances/${id}`),
-  createInstance: (name: string, engine: string, version?: string) =>
-    request<Instance>("/instances", { method: "POST", body: JSON.stringify({ name, engine, version }) }),
+  createInstance: (name: string, engine: string, version?: string, tls?: boolean) =>
+    request<Instance>("/instances", { method: "POST", body: JSON.stringify({ name, engine, version, tls }) }),
+  caCertificate: () => request<string>("/tls/ca-certificate"),
   deleteInstance: (id: string) => request<void>(`/instances/${id}`, { method: "DELETE" }),
   getMetrics: (id: string) => request<ContainerStats>(`/instances/${id}/metrics`),
   getLogs: (id: string) => request<string>(`/instances/${id}/logs`),

@@ -35,4 +35,25 @@ export const mysqlManifest: ServiceManifest = {
     restoreCmd: (s) => ["mysql", "-uroot", `-p${s.password}`, s.database],
   },
   resourceDefaults: { cpu: "1", memoryMb: 512, diskGb: 2 },
+  tls: {
+    certDir: "/wharf-tls",
+    runtimeUser: "mysql",
+    entrypoint: "docker-entrypoint.sh",
+    args: (_s, certDir) => [
+      "mysqld",
+      `--ssl-cert=${certDir}/server.crt`,
+      `--ssl-key=${certDir}/server.key`,
+      `--ssl-ca=${certDir}/ca.crt`,
+    ],
+    // "?ssl=true" is a marker mysql.ts's own withClient() looks for, not a
+    // mysql2-native URI param — mysql2's URI parsing doesn't reliably turn
+    // query-string ssl flags into a real TLS options object, so the browser
+    // adapter parses this itself and passes { rejectUnauthorized: false }
+    // as an explicit sibling option instead. Same suffix for internal and
+    // external: mysql2 is the only client this repo's own code drives
+    // against these instances, and framework connect snippets in the UI
+    // already show engine-appropriate ssl config for other clients.
+    internalConnectionSuffix: () => "?ssl=true",
+    externalConnectionSuffix: () => "?ssl=true",
+  },
 };

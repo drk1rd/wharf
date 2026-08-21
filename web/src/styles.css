@@ -87,25 +87,35 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 0 24px 80px;
+/*
+ * A persistent sidebar, not a scrolling topbar — this is the single biggest
+ * lever for reading as a real product (Atlas/Supabase-shaped) instead of a
+ * form wrapped in a page. Two fixed-position columns rather than one
+ * scrolling document: the sidebar's nav/account controls stay put while
+ * .content scrolls on its own, same as every dashboard this is patterned
+ * after. Deliberately just two nav destinations (Databases, Settings) —
+ * this product doesn't have more top-level sections to hang on it, and
+ * adding chrome for navigation that doesn't exist would be exactly the
+ * complexity the "not that complex for people" brief was warning against.
+ */
+.app-shell {
+  display: flex;
   min-height: 100vh;
 }
 
-.topbar {
+.sidebar {
+  width: 220px;
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-raised);
   position: sticky;
   top: 0;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
-  z-index: 10;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
@@ -118,19 +128,69 @@ body {
   color: var(--text);
   text-decoration: none;
   letter-spacing: -0.01em;
+  padding: 0 8px;
+  margin-bottom: 22px;
 }
 
 .brand svg {
   color: var(--accent);
 }
 
-.tagline {
-  color: var(--muted);
-  font-size: 13px;
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.topbar-spacer {
+.sidebar-link {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.sidebar-link:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.sidebar-link.active {
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+.sidebar-spacer {
   flex: 1;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-email {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 32px 80px;
+}
+
+.content-inner {
+  max-width: 860px;
 }
 
 .theme-toggle {
@@ -144,6 +204,48 @@ body {
   justify-content: center;
   font-size: 15px;
   padding: 0;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 16px;
+    overflow-y: visible;
+  }
+
+  .brand {
+    margin-bottom: 0;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+  }
+
+  .sidebar-spacer {
+    display: none;
+  }
+
+  .sidebar-footer {
+    border-top: none;
+    padding: 0;
+  }
+
+  .sidebar-email {
+    display: none;
+  }
+
+  .content {
+    padding: 20px 16px 60px;
+  }
 }
 
 h1,
@@ -180,6 +282,33 @@ h2 {
 
 .section {
   margin-bottom: 36px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.engine-no-tls {
+  color: var(--muted);
+  opacity: 0.8;
 }
 
 .engine-cards {
@@ -1161,12 +1290,6 @@ input:focus-visible {
   margin-top: 20px;
 }
 
-.topbar-email {
-  color: var(--muted);
-  font-size: 13px;
-  margin-right: 4px;
-}
-
 .auth-screen {
   min-height: 100vh;
   display: flex;
@@ -1242,6 +1365,70 @@ input:focus-visible {
   margin-top: 14px;
   text-align: center;
   color: var(--muted);
+}
+
+.auth-card form select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.auth-card form label.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.auth-card form label.checkbox-row input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.setup-steps {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.setup-step {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 2px solid transparent;
+}
+
+.setup-step.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.setup-step.done {
+  color: var(--text);
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 14px;
+  max-width: 360px;
 }
 
 .model-filter {
