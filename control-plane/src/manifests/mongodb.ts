@@ -63,6 +63,14 @@ export const mongodbManifest: ServiceManifest = {
       "--tlsMode", "preferTLS",
       "--tlsCertificateKeyFile", `${certDir}/combined.pem`,
       "--tlsCAFile", `${certDir}/ca.crt`,
+      // Setting --tlsCAFile at all makes mongod default to REQUIRING a
+      // client certificate signed by it (net.tls.allowConnectionsWithoutCertificates
+      // defaults to false the moment a CA file is configured) — this is
+      // server-only encryption, not mutual TLS, so clients (including the
+      // control plane's own probe/browser-adapter connections, which never
+      // present a client cert) need this explicitly or mongod silently
+      // closes every connection right after the TLS handshake.
+      "--tlsAllowConnectionsWithoutCertificates",
     ],
     // Both spelled out directly in the URI — the MongoDB driver (and the
     // official connection-string spec) reads tls/tlsAllowInvalidCertificates
