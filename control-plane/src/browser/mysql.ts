@@ -71,6 +71,39 @@ export const mysqlAdapter: BrowserAdapter = {
     });
   },
 
+  async getRowById(connectionString, table, idColumn, idValue): Promise<QueryResult> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    return withConnection(connectionString, async (conn) => {
+      const [rows, fields] = await conn.query<mysql.RowDataPacket[]>(`SELECT * FROM ${t} WHERE ${col} = ?`, [idValue]);
+      return { columns: fields.map((f) => f.name), rows, rowCount: rows.length };
+    });
+  },
+
+  async updateRowById(connectionString, table, idColumn, idValue, patch): Promise<{ updated: number }> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    const columns = Object.keys(patch);
+    if (columns.length === 0) return { updated: 0 };
+    const setClause = columns.map((c) => `${quoteIdent(c)} = ?`).join(", ");
+    return withConnection(connectionString, async (conn) => {
+      const [result] = await conn.query<mysql.ResultSetHeader>(
+        `UPDATE ${t} SET ${setClause} WHERE ${col} = ?`,
+        [...columns.map((c) => patch[c]), idValue]
+      );
+      return { updated: result.affectedRows };
+    });
+  },
+
+  async deleteRowById(connectionString, table, idColumn, idValue): Promise<{ deleted: number }> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    return withConnection(connectionString, async (conn) => {
+      const [result] = await conn.query<mysql.ResultSetHeader>(`DELETE FROM ${t} WHERE ${col} = ?`, [idValue]);
+      return { deleted: result.affectedRows };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withConnection(connectionString, async (conn) => {
       await conn.query(`

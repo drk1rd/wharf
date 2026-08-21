@@ -60,6 +60,11 @@ async function query(connectionString: string, sql: string): Promise<{ columns: 
   return { columns: (parsed.meta ?? []).map((m) => m.name), rows: parsed.data ?? [] };
 }
 
+/** Escapes a string for use as a single-quoted literal in a query built by string concatenation. */
+function escapeLiteral(value: string): string {
+  return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
+}
+
 export const clickhouseAdapter: BrowserAdapter = {
   async listObjects(connectionString): Promise<BrowseObject[]> {
     const { rows } = await query(
@@ -82,6 +87,22 @@ export const clickhouseAdapter: BrowserAdapter = {
 
   async runQuery(connectionString, sql): Promise<QueryResult> {
     const { columns, rows } = await query(connectionString, sql);
+    return { columns, rows, rowCount: rows.length };
+  },
+
+  // toString(...) makes this work regardless of the id column's real type
+  // (UInt32, String, UUID, ...) without needing to know it up front — a
+  // real bind parameter isn't available over ClickHouse's HTTP interface,
+  // so the value is escaped as a string literal instead (see escapeLiteral).
+  // UPDATE/DELETE are deliberately not implemented here — see the
+  // BrowserAdapter.updateRowById/deleteRowById doc comment.
+  async getRowById(connectionString, table, idColumn, idValue): Promise<QueryResult> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    const { columns, rows } = await query(
+      connectionString,
+      `SELECT * FROM ${t} WHERE toString(${col}) = ${escapeLiteral(idValue)} LIMIT 1`
+    );
     return { columns, rows, rowCount: rows.length };
   },
 

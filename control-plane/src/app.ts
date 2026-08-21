@@ -5,6 +5,7 @@ import { identify, requireAuth, authRequired } from "./auth.js";
 import { authRouter } from "./routes/auth.js";
 import { instancesRouter } from "./routes/instances.js";
 import { browseRouter } from "./routes/browse.js";
+import { tableApiRouter } from "./routes/tableApi.js";
 import { askEnabled } from "./ask.js";
 
 export function buildApp(): express.Express {
@@ -24,6 +25,7 @@ export function buildApp(): express.Express {
 
   app.use("/api", requireAuth, instancesRouter);
   app.use("/api", requireAuth, browseRouter);
+  app.use("/api", requireAuth, tableApiRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // eslint-disable-next-line no-console

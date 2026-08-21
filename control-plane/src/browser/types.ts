@@ -49,4 +49,26 @@ export interface BrowserAdapter {
    * is unused — Redis has no table/collection concept to import into.
    */
   importRows?(connectionString: string, target: string, rows: Record<string, unknown>[]): Promise<{ inserted: number }>;
+  /**
+   * Row-level operations for the auto-generated per-table REST API
+   * (routes/tableApi.ts). Tables have no guaranteed single well-known
+   * primary-key column across engines — ClickHouse's MergeTree "primary
+   * key" is a sort/index key, not a uniqueness constraint, and plenty of
+   * tables have none at all — so callers must specify which column to
+   * filter by rather than an adapter assuming one named "id" exists.
+   * ClickHouse implements only getRowById: its UPDATE/DELETE are async
+   * background mutations (ALTER TABLE ... UPDATE/DELETE), not immediately
+   * consistent operations, so exposing them through a REST PATCH/DELETE
+   * that returns before the mutation actually applies would misrepresent
+   * what happened — left unsupported rather than shipped dishonestly.
+   */
+  getRowById?(connectionString: string, table: string, idColumn: string, idValue: string): Promise<QueryResult>;
+  updateRowById?(
+    connectionString: string,
+    table: string,
+    idColumn: string,
+    idValue: string,
+    patch: Record<string, unknown>
+  ): Promise<{ updated: number }>;
+  deleteRowById?(connectionString: string, table: string, idColumn: string, idValue: string): Promise<{ deleted: number }>;
 }

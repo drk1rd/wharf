@@ -81,6 +81,39 @@ export const postgresAdapter: BrowserAdapter = {
     });
   },
 
+  async getRowById(connectionString, table, idColumn, idValue): Promise<QueryResult> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    return withClient(connectionString, async (client) => {
+      const res = await client.query(`SELECT * FROM ${t} WHERE ${col} = $1`, [idValue]);
+      return { columns: res.fields.map((f) => f.name), rows: res.rows, rowCount: res.rowCount ?? res.rows.length };
+    });
+  },
+
+  async updateRowById(connectionString, table, idColumn, idValue, patch): Promise<{ updated: number }> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    const columns = Object.keys(patch);
+    if (columns.length === 0) return { updated: 0 };
+    const setClause = columns.map((c, i) => `${quoteIdent(c)} = $${i + 1}`).join(", ");
+    return withClient(connectionString, async (client) => {
+      const res = await client.query(
+        `UPDATE ${t} SET ${setClause} WHERE ${col} = $${columns.length + 1}`,
+        [...columns.map((c) => patch[c]), idValue]
+      );
+      return { updated: res.rowCount ?? 0 };
+    });
+  },
+
+  async deleteRowById(connectionString, table, idColumn, idValue): Promise<{ deleted: number }> {
+    const t = quoteIdent(table);
+    const col = quoteIdent(idColumn);
+    return withClient(connectionString, async (client) => {
+      const res = await client.query(`DELETE FROM ${t} WHERE ${col} = $1`, [idValue]);
+      return { deleted: res.rowCount ?? 0 };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withClient(connectionString, async (client) => {
       await client.query(`

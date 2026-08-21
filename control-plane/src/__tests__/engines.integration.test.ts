@@ -63,6 +63,56 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 240_00
   const afterImport = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
   assert.equal(Number(afterImport.body.rows[0].n), 4);
 
+  // Auto-generated per-table REST API: full CRUD round-trip against the
+  // seeded "customers" table (id SERIAL PRIMARY KEY — the idColumn default).
+  const apiList = await client.get(`/api/instances/${instance.id}/api/customers`);
+  assert.equal(apiList.status, 200);
+  assert.equal(apiList.body.rowCount, 4);
+
+  const apiCreated = await client.post(`/api/instances/${instance.id}/api/customers`, {
+    name: "API User",
+    email: "api-user@example.com",
+  });
+  assert.equal(apiCreated.status, 201);
+  assert.equal(apiCreated.body.inserted, 1);
+
+  const afterApiInsert = await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: "SELECT id FROM customers WHERE email = 'api-user@example.com'",
+  });
+  assert.equal(afterApiInsert.body.rows.length, 1);
+  const newId = afterApiInsert.body.rows[0].id;
+
+  const apiGet = await client.get(`/api/instances/${instance.id}/api/customers/${newId}`);
+  assert.equal(apiGet.status, 200);
+  assert.equal(apiGet.body.name, "API User");
+
+  const apiMissing = await client.get(`/api/instances/${instance.id}/api/customers/999999`);
+  assert.equal(apiMissing.status, 404, "a nonexistent row id should 404, not 200 with an empty body");
+
+  const apiUpdated = await client.patch(`/api/instances/${instance.id}/api/customers/${newId}`, { name: "API User Updated" });
+  assert.equal(apiUpdated.status, 200);
+  assert.equal(apiUpdated.body.updated, 1);
+
+  const apiGetAfterUpdate = await client.get(`/api/instances/${instance.id}/api/customers/${newId}`);
+  assert.equal(apiGetAfterUpdate.body.name, "API User Updated");
+
+  // idColumn is caller-specified, not assumed to be "id" — prove filtering
+  // by a different real column (email) also works end to end.
+  const apiGetByEmail = await client.get(
+    `/api/instances/${instance.id}/api/customers/${encodeURIComponent("api-user@example.com")}?idColumn=email`
+  );
+  assert.equal(apiGetByEmail.status, 200);
+  assert.equal(apiGetByEmail.body.name, "API User Updated");
+
+  const apiDeleted = await client.delete(`/api/instances/${instance.id}/api/customers/${newId}`);
+  assert.equal(apiDeleted.status, 204);
+
+  const apiGetAfterDelete = await client.get(`/api/instances/${instance.id}/api/customers/${newId}`);
+  assert.equal(apiGetAfterDelete.status, 404);
+
+  const apiListAfter = await client.get(`/api/instances/${instance.id}/api/customers`);
+  assert.equal(apiListAfter.body.rowCount, 4, "back to 4 after the API-inserted row was deleted");
+
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 1 AS one" });
   assert.equal(query.status, 200);
   assert.equal(query.body.rows[0].one, 1);
