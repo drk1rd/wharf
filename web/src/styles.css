@@ -1,64 +1,73 @@
+/*
+ * Palette extends the landing page's identity (landing/index.html) into the
+ * product itself: ink-navy base, an amber "beacon" accent and teal "channel
+ * marker" secondary, replacing the generic blue-on-grey default every other
+ * dashboard template also reaches for. Light mode is a warm paper tone, not
+ * plain cool grey, with the same accents darkened for contrast — a genuine
+ * second theme, not a naive inversion of the dark one.
+ */
 :root {
-  --bg: #f6f7f9;
+  --bg: #f7f4ec;
   --bg-raised: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f0f2f5;
-  --border: #e3e6ec;
-  --text: #14161b;
-  --muted: #656e7d;
-  --accent: #1c7ed6;
+  --panel-2: #f1ece0;
+  --border: #e3dcc9;
+  --text: #1a1f2c;
+  --muted: #5c6270;
+  --accent: #b9762a;
   --accent-contrast: #ffffff;
-  --danger: #d92b2b;
-  --danger-bg: rgba(217, 43, 43, 0.08);
-  --ok: #158f63;
-  --ok-bg: rgba(21, 143, 99, 0.1);
-  --warn: #b5750a;
-  --warn-bg: rgba(181, 117, 10, 0.12);
+  --danger: #c4432e;
+  --danger-bg: rgba(196, 67, 46, 0.08);
+  --ok: #1f8f76;
+  --ok-bg: rgba(31, 143, 118, 0.1);
+  --warn: #a8791f;
+  --warn-bg: rgba(168, 121, 31, 0.12);
   --shadow: 0 1px 2px rgba(20, 22, 27, 0.04), 0 8px 24px rgba(20, 22, 27, 0.06);
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --font-sans: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --font-display: "Fraunces", Georgia, "Iowan Old Style", serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0a0c10;
-    --bg-raised: #12151c;
-    --panel: #12151c;
-    --panel-2: #191d26;
-    --border: #262b36;
-    --text: #edeff3;
-    --muted: #8b93a3;
-    --accent: #4fb3ff;
-    --accent-contrast: #06121f;
-    --danger: #ff6b6b;
-    --danger-bg: rgba(255, 107, 107, 0.12);
-    --ok: #3ddc9a;
-    --ok-bg: rgba(61, 220, 154, 0.12);
-    --warn: #f2b84b;
-    --warn-bg: rgba(242, 184, 75, 0.14);
+    --bg: #0a0f1a;
+    --bg-raised: #121826;
+    --panel: #121826;
+    --panel-2: #0d1320;
+    --border: #262f47;
+    --text: #f2ede1;
+    --muted: #8b93a7;
+    --accent: #e8a33d;
+    --accent-contrast: #1a1206;
+    --danger: #ef7b62;
+    --danger-bg: rgba(239, 123, 98, 0.14);
+    --ok: #3fbfa6;
+    --ok-bg: rgba(63, 191, 166, 0.14);
+    --warn: #d9a441;
+    --warn-bg: rgba(217, 164, 65, 0.16);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0a0c10;
-  --bg-raised: #12151c;
-  --panel: #12151c;
-  --panel-2: #191d26;
-  --border: #262b36;
-  --text: #edeff3;
-  --muted: #8b93a3;
-  --accent: #4fb3ff;
-  --accent-contrast: #06121f;
-  --danger: #ff6b6b;
-  --danger-bg: rgba(255, 107, 107, 0.12);
-  --ok: #3ddc9a;
-  --ok-bg: rgba(61, 220, 154, 0.12);
-  --warn: #f2b84b;
-  --warn-bg: rgba(242, 184, 75, 0.14);
+  --bg: #0a0f1a;
+  --bg-raised: #121826;
+  --panel: #121826;
+  --panel-2: #0d1320;
+  --border: #262f47;
+  --text: #f2ede1;
+  --muted: #8b93a7;
+  --accent: #e8a33d;
+  --accent-contrast: #1a1206;
+  --danger: #ef7b62;
+  --danger-bg: rgba(239, 123, 98, 0.14);
+  --ok: #3fbfa6;
+  --ok-bg: rgba(63, 191, 166, 0.14);
+  --warn: #d9a441;
+  --warn-bg: rgba(217, 164, 65, 0.16);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
@@ -103,8 +112,9 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 17px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
   color: var(--text);
   text-decoration: none;
   letter-spacing: -0.01em;
@@ -155,7 +165,9 @@ h2 {
 }
 
 .hero h1 {
-  font-size: 28px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 30px;
   margin-bottom: 6px;
 }
 
@@ -350,8 +362,10 @@ h2 {
 }
 
 .instance-header h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .sub {
@@ -633,10 +647,156 @@ button.ghost {
   background: var(--panel-2);
 }
 
+/*
+ * Needs to out-rank .object-list button's own transparent background at
+ * equal specificity (found for real: without this, the two rules tie and
+ * whichever comes later in the file wins, which made the selected table
+ * name render in button.active's dark accent-contrast text color against
+ * a transparent — effectively still-dark — background, nearly invisible).
+ */
+.object-list button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.object-list button.active .count {
+  color: var(--accent-contrast);
+  opacity: 0.75;
+}
+
 .count {
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.filter-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-row select,
+.filter-row input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.filter-row select:first-child {
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+.filter-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-remove {
+  border-color: transparent;
+  color: var(--muted);
+  padding: 4px 8px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.filter-remove:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-actions button {
+  font-size: 12.5px;
+  padding: 5px 10px;
+}
+
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.id-column-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.id-column-picker select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.edit-toolbar > button {
+  font-size: 12.5px;
+  padding: 5px 10px;
+}
+
+.editable-table .row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.editable-table .row-actions button {
+  font-size: 12px;
+  padding: 4px 9px;
+  margin-left: 4px;
+}
+
+.editable-table tbody input {
+  width: 100%;
+  min-width: 80px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+
+.editable-table tbody input:disabled {
+  opacity: 0.5;
+}
+
+.editable-table tr.editing-row {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .export-row {
@@ -1029,14 +1189,17 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 19px;
   color: var(--accent);
   margin-bottom: 20px;
 }
 
 .auth-card h1 {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
   margin-bottom: 4px;
 }
 

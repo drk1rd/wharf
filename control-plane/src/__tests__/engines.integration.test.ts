@@ -122,6 +122,41 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 240_00
   const apiListAfter = await client.get(`/api/instances/${instance.id}/api/customers`);
   assert.equal(apiListAfter.body.rowCount, 4, "back to 4 after the API-inserted row was deleted");
 
+  // Data browser filter builder: real WHERE clauses against real data,
+  // covering a comparison op, a substring ("contains") op, and AND-combined
+  // multiple filters — the three shapes the frontend filter builder emits.
+  function filteredRows(filters: unknown) {
+    return client.get(
+      `/api/instances/${instance.id}/browse/objects/customers/rows?filters=${encodeURIComponent(JSON.stringify(filters))}`
+    );
+  }
+
+  const containsFilter = await filteredRows([{ column: "email", op: "contains", value: "ada" }]);
+  assert.equal(containsFilter.status, 200);
+  assert.equal(containsFilter.body.rows.length, 1);
+  assert.equal(containsFilter.body.rows[0].email, "ada@example.com");
+
+  const equalsFilter = await filteredRows([{ column: "name", op: "=", value: "Grace Hopper" }]);
+  assert.equal(equalsFilter.body.rows.length, 1);
+  assert.equal(equalsFilter.body.rows[0].name, "Grace Hopper");
+
+  const noMatchFilter = await filteredRows([{ column: "email", op: "=", value: "nobody@example.com" }]);
+  assert.equal(noMatchFilter.body.rows.length, 0);
+
+  // AND-combined: both conditions must hold — a name that matches but an
+  // email that doesn't should exclude the row.
+  const combinedNoMatch = await filteredRows([
+    { column: "name", op: "=", value: "Grace Hopper" },
+    { column: "email", op: "contains", value: "ada" },
+  ]);
+  assert.equal(combinedNoMatch.body.rows.length, 0);
+
+  const combinedMatch = await filteredRows([
+    { column: "name", op: "=", value: "Grace Hopper" },
+    { column: "email", op: "contains", value: "grace" },
+  ]);
+  assert.equal(combinedMatch.body.rows.length, 1);
+
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 1 AS one" });
   assert.equal(query.status, 200);
   assert.equal(query.body.rows[0].one, 1);

@@ -5,6 +5,7 @@ import {
   type ApiToken,
   type AskResult,
   type AuditLogEntry,
+  type BrowseFilter,
   type BrowseObject,
   type ContainerStats,
   type Instance,
@@ -419,11 +420,29 @@ function CopyField({ label, value, copyValue }: { label: string; value: string; 
   );
 }
 
+// The auto-generated per-table REST API (control-plane/src/routes/tableApi.ts)
+// only exists for SQL engines with a real notion of "a table" — the filter
+// builder and inline editing below are both gated on this same set. Within
+// it, ClickHouse only ever gets GET/POST (see tableApi.ts's own comment on
+// why PATCH/DELETE aren't safe to expose there yet).
+function sqlEngine(engine: string): boolean {
+  return engine === "postgres" || engine === "mysql" || engine === "clickhouse";
+}
+function canEditRows(engine: string): boolean {
+  return engine === "postgres" || engine === "mysql";
+}
+
+function emptyFilter(columns: string[]): BrowseFilter {
+  return { column: columns[0] ?? "", op: "=", value: "" };
+}
+
 function BrowsePanel({ instance }: { instance: Instance }) {
   const toast = useToast();
   const [objects, setObjects] = useState<BrowseObject[]>([]);
   const [selected, setSelected] = useState<BrowseObject | null>(null);
   const [rows, setRows] = useState<QueryResult | null>(null);
+  const [filters, setFilters] = useState<BrowseFilter[]>([]);
+  const [idColumn, setIdColumn] = useState("id");
   const [queryText, setQueryText] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [running, setRunning] = useState(false);
@@ -441,13 +460,38 @@ function BrowsePanel({ instance }: { instance: Instance }) {
     refreshObjects();
   }, [refreshObjects]);
 
-  async function openObject(obj: BrowseObject) {
-    setSelected(obj);
+  const activeFilters = useCallback(
+    (candidate: BrowseFilter[]) => candidate.filter((f) => f.column && f.value.trim() !== ""),
+    []
+  );
+
+  async function loadRows(obj: BrowseObject, withFilters: BrowseFilter[]) {
     try {
-      setRows(await api.browseObject(instance.id, obj.name, obj.schema, 100, 0));
+      const result = await api.browseObject(instance.id, obj.name, obj.schema, 100, 0, activeFilters(withFilters));
+      setRows(result);
+      return result;
     } catch (err) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
+      return null;
     }
+  }
+
+  async function openObject(obj: BrowseObject) {
+    setSelected(obj);
+    setFilters([]);
+    const result = await loadRows(obj, []);
+    const cols = result?.columns ?? [];
+    setIdColumn(cols.includes("id") ? "id" : (cols[0] ?? "id"));
+  }
+
+  async function applyFilters() {
+    if (!selected) return;
+    await loadRows(selected, filters);
+  }
+
+  async function refreshCurrentRows() {
+    if (!selected) return;
+    await loadRows(selected, filters);
   }
 
   async function runQuery() {
@@ -526,8 +570,23 @@ function BrowsePanel({ instance }: { instance: Instance }) {
           </ul>
         </div>
         <div className="object-rows">
+          {selected && sqlEngine(instance.engine) && rows && (
+            <FilterBuilder columns={rows.columns ?? []} filters={filters} onChange={setFilters} onApply={applyFilters} />
+          )}
           {rows ? (
-            <ResultTable result={rows} />
+            sqlEngine(instance.engine) ? (
+              <EditableResultTable
+                instanceId={instance.id}
+                table={selected!.name}
+                result={rows}
+                idColumn={idColumn}
+                onIdColumnChange={setIdColumn}
+                canEditDelete={canEditRows(instance.engine)}
+                onChanged={refreshCurrentRows}
+              />
+            ) : (
+              <ResultTable result={rows} />
+            )
           ) : (
             <p className="empty">Select a {singular} to view its {instance.engine === "redis" ? "value" : "rows"}.</p>
           )}
@@ -552,6 +611,310 @@ function BrowsePanel({ instance }: { instance: Instance }) {
         )}
       </div>
     </section>
+  );
+}
+
+function FilterBuilder({
+  columns,
+  filters,
+  onChange,
+  onApply,
+}: {
+  columns: string[];
+  filters: BrowseFilter[];
+  onChange: (filters: BrowseFilter[]) => void;
+  onApply: () => void;
+}) {
+  function addFilter() {
+    onChange([...filters, emptyFilter(columns)]);
+  }
+  function updateFilter(i: number, patch: Partial<BrowseFilter>) {
+    onChange(filters.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  }
+  function removeFilter(i: number) {
+    const next = filters.filter((_, idx) => idx !== i);
+    onChange(next);
+  }
+
+  return (
+    <div className="filter-builder">
+      {filters.map((f, i) => (
+        <div className="filter-row" key={i}>
+          <select value={f.column} onChange={(e) => updateFilter(i, { column: e.target.value })}>
+            {columns.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <select value={f.op} onChange={(e) => updateFilter(i, { op: e.target.value as BrowseFilter["op"] })}>
+            <option value="=">=</option>
+            <option value="!=">≠</option>
+            <option value=">">&gt;</option>
+            <option value="<">&lt;</option>
+            <option value=">=">&ge;</option>
+            <option value="<=">&le;</option>
+            <option value="contains">contains</option>
+          </select>
+          <input
+            type="text"
+            value={f.value}
+            placeholder="value"
+            onChange={(e) => updateFilter(i, { value: e.target.value })}
+            onKeyDown={(e) => e.key === "Enter" && onApply()}
+          />
+          <button className="ghost filter-remove" onClick={() => removeFilter(i)} aria-label="Remove filter">
+            ×
+          </button>
+        </div>
+      ))}
+      <div className="filter-actions">
+        <button className="ghost" onClick={addFilter} disabled={columns.length === 0}>
+          + Add filter
+        </button>
+        {filters.length > 0 && (
+          <button className="primary" onClick={onApply}>
+            Apply filters
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditToolbar({
+  idColumn,
+  onIdColumnChange,
+  columns,
+  onAdd,
+}: {
+  idColumn: string;
+  onIdColumnChange: (c: string) => void;
+  columns: string[];
+  onAdd: () => void;
+}) {
+  return (
+    <div className="edit-toolbar">
+      <label className="id-column-picker">
+        Row ID column
+        <select value={idColumn} onChange={(e) => onIdColumnChange(e.target.value)}>
+          {columns.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="ghost" onClick={onAdd}>
+        + Add row
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Used for browsing an actual table (postgres/mysql/clickhouse), never for
+ * an arbitrary query/ask-your-data result — a raw SELECT might not even map
+ * to one real table, so editing it in place wouldn't be honest. Backed by
+ * the auto-generated per-table REST API (routes/tableApi.ts): idColumn is
+ * caller-specified rather than assumed, same reasoning as that API's own
+ * design, since none of these engines guarantee a single well-known
+ * primary-key column. canEditDelete is false for ClickHouse — its
+ * UPDATE/DELETE are async background mutations, not immediately-consistent
+ * ones, so only insert (POST) is offered there.
+ */
+function EditableResultTable({
+  instanceId,
+  table,
+  result,
+  idColumn,
+  onIdColumnChange,
+  canEditDelete,
+  onChanged,
+}: {
+  instanceId: string;
+  table: string;
+  result: QueryResult;
+  idColumn: string;
+  onIdColumnChange: (c: string) => void;
+  canEditDelete: boolean;
+  onChanged: () => void;
+}) {
+  const toast = useToast();
+  const confirmDialog = useConfirm();
+  const [editingRow, setEditingRow] = useState<number | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [adding, setAdding] = useState(false);
+  const [newRowValues, setNewRowValues] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+
+  const columns = result.columns && result.columns.length > 0 ? result.columns : result.rows[0] ? Object.keys(result.rows[0] as object) : [];
+
+  function startEdit(i: number, row: Record<string, unknown>) {
+    setEditingRow(i);
+    const values: Record<string, string> = {};
+    for (const c of columns) values[c] = formatCell(row[c]);
+    setEditValues(values);
+  }
+
+  async function saveEdit(row: Record<string, unknown>) {
+    const rowIdValue = String(row[idColumn] ?? "");
+    if (!rowIdValue) {
+      toast.push(`This row has no value in "${idColumn}" — pick a different row ID column above.`, "error");
+      return;
+    }
+    const patch: Record<string, unknown> = {};
+    for (const c of columns) {
+      if (c === idColumn) continue;
+      if ((editValues[c] ?? "") !== formatCell(row[c])) patch[c] = editValues[c];
+    }
+    if (Object.keys(patch).length === 0) {
+      setEditingRow(null);
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.updateRow(instanceId, table, idColumn, rowIdValue, patch);
+      toast.push("Row updated.", "success");
+      setEditingRow(null);
+      onChanged();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteRow(row: Record<string, unknown>) {
+    const rowIdValue = String(row[idColumn] ?? "");
+    if (!rowIdValue) {
+      toast.push(`This row has no value in "${idColumn}" — pick a different row ID column above.`, "error");
+      return;
+    }
+    const ok = await confirmDialog({ title: "Delete this row?", description: "This can't be undone.", confirmLabel: "Delete", danger: true });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.deleteRow(instanceId, table, idColumn, rowIdValue);
+      toast.push("Row deleted.", "success");
+      onChanged();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveNewRow() {
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {};
+      for (const c of columns) {
+        if (newRowValues[c] !== undefined && newRowValues[c] !== "") payload[c] = newRowValues[c];
+      }
+      await api.insertRow(instanceId, table, payload);
+      toast.push("Row added.", "success");
+      setAdding(false);
+      setNewRowValues({});
+      onChanged();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <EditToolbar idColumn={idColumn} onIdColumnChange={onIdColumnChange} columns={columns} onAdd={() => setAdding(true)} />
+      {result.rows.length === 0 && !adding ? (
+        <p className="empty">No rows.</p>
+      ) : (
+        <div className="table-scroll">
+          <table className="result-table editable-table">
+            <thead>
+              <tr>
+                {columns.map((c) => (
+                  <th key={c}>{c}</th>
+                ))}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {adding && (
+                <tr className="editing-row">
+                  {columns.map((c) => (
+                    <td key={c}>
+                      <input
+                        value={newRowValues[c] ?? ""}
+                        placeholder={c}
+                        onChange={(e) => setNewRowValues((v) => ({ ...v, [c]: e.target.value }))}
+                      />
+                    </td>
+                  ))}
+                  <td className="row-actions">
+                    <button className="primary" onClick={saveNewRow} disabled={busy}>
+                      Save
+                    </button>
+                    <button
+                      className="ghost"
+                      onClick={() => {
+                        setAdding(false);
+                        setNewRowValues({});
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </td>
+                </tr>
+              )}
+              {result.rows.map((row, i) => {
+                const record = row as Record<string, unknown>;
+                const isEditing = editingRow === i;
+                return (
+                  <tr key={i} className={isEditing ? "editing-row" : undefined}>
+                    {columns.map((c) =>
+                      isEditing ? (
+                        <td key={c}>
+                          <input
+                            value={editValues[c] ?? ""}
+                            disabled={c === idColumn}
+                            onChange={(e) => setEditValues((v) => ({ ...v, [c]: e.target.value }))}
+                          />
+                        </td>
+                      ) : (
+                        <td key={c}>{formatCell(record[c])}</td>
+                      )
+                    )}
+                    <td className="row-actions">
+                      {!canEditDelete ? null : isEditing ? (
+                        <>
+                          <button className="primary" onClick={() => saveEdit(record)} disabled={busy}>
+                            Save
+                          </button>
+                          <button className="ghost" onClick={() => setEditingRow(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="ghost" onClick={() => startEdit(i, record)}>
+                            Edit
+                          </button>
+                          <button className="danger" onClick={() => deleteRow(record)}>
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

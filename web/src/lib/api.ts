@@ -82,6 +82,12 @@ export interface QueryResult {
   rowCount: number;
 }
 
+export interface BrowseFilter {
+  column: string;
+  op: "=" | "!=" | ">" | "<" | ">=" | "<=" | "contains";
+  value: string;
+}
+
 export interface Backup {
   id: string;
   instance_id: string;
@@ -139,9 +145,10 @@ export const api = {
   getMetrics: (id: string) => request<ContainerStats>(`/instances/${id}/metrics`),
   getLogs: (id: string) => request<string>(`/instances/${id}/logs`),
   listObjects: (id: string) => request<BrowseObject[]>(`/instances/${id}/browse/objects`),
-  browseObject: (id: string, name: string, schema: string | undefined, limit: number, offset: number) => {
+  browseObject: (id: string, name: string, schema: string | undefined, limit: number, offset: number, filters?: BrowseFilter[]) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (schema) params.set("schema", schema);
+    if (filters && filters.length > 0) params.set("filters", JSON.stringify(filters));
     return request<QueryResult>(`/instances/${id}/browse/objects/${encodeURIComponent(name)}/rows?${params}`);
   },
   runQuery: (id: string, query: string) =>
@@ -173,6 +180,24 @@ export const api = {
   revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
   listAuditLog: (id: string) => request<AuditLogEntry[]>(`/instances/${id}/audit-log`),
   createBranch: (id: string, name?: string) => request<Instance>(`/instances/${id}/branches`, { method: "POST", body: JSON.stringify({ name }) }),
+
+  // Auto-generated per-table REST API (see control-plane/src/routes/tableApi.ts) —
+  // used by the data browser's inline row editing, SQL engines only.
+  insertRow: (id: string, table: string, row: Record<string, unknown>) =>
+    request<{ inserted: number }>(`/instances/${id}/api/${encodeURIComponent(table)}`, {
+      method: "POST",
+      body: JSON.stringify(row),
+    }),
+  updateRow: (id: string, table: string, idColumn: string, rowId: string, patch: Record<string, unknown>) =>
+    request<{ updated: number }>(
+      `/instances/${id}/api/${encodeURIComponent(table)}/${encodeURIComponent(rowId)}?idColumn=${encodeURIComponent(idColumn)}`,
+      { method: "PATCH", body: JSON.stringify(patch) }
+    ),
+  deleteRow: (id: string, table: string, idColumn: string, rowId: string) =>
+    request<void>(
+      `/instances/${id}/api/${encodeURIComponent(table)}/${encodeURIComponent(rowId)}?idColumn=${encodeURIComponent(idColumn)}`,
+      { method: "DELETE" }
+    ),
 
   // Superadmin-only platform management (see control-plane/src/routes/admin.ts).
   listUsers: () => request<ManagedUser[]>("/users"),
