@@ -35,7 +35,7 @@ To enable **Ask your data** (ask a database question in plain English instead of
 
 ## Running a small pilot (letting a few people try it)
 
-1. **Set `WHARF_MAX_INSTANCES`** (e.g. `10`) so one enthusiastic tester can't exhaust the host by creating instances in a loop.
+1. **Set `WHARF_MAX_INSTANCES`** (e.g. `10`) so one enthusiastic tester can't exhaust the host by creating instances in a loop. On its own this only caps *count* — live resize (below) still lets any single instance grow to 16 cores / 32GB, so also set **`WHARF_MAX_TOTAL_CPU`** (cores) and/or **`WHARF_MAX_TOTAL_MEMORY_MB`** to cap the combined cpu/memory reserved across every instance on the host. Both are enforced on create *and* resize; either is optional and unset means no limit on that dimension.
 2. **Have testers sign up for real accounts** rather than sharing one login — each account only sees its own instances (plus anything created before any account existed). Set `WHARF_TOKEN` too if you also want an admin/CLI bypass that can see everything.
 3. **Expose it** — the fastest path for a handful of people is a tunnel from a machine you already have (`docker compose up` locally, then `cloudflared tunnel --url http://localhost:5173` or `ngrok http 5173` for a public HTTPS URL), rather than standing up new cloud infra for a short pilot. Set `WHARF_COOKIE_SECURE=true` once it's served over HTTPS so session cookies get the `Secure` flag.
 

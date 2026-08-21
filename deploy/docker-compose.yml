@@ -18,6 +18,12 @@ services:
       # total — protects a shared host (e.g. a pilot everyone points at) from
       # one person exhausting it. 0 or unset = no cap.
       WHARF_MAX_INSTANCES: ${WHARF_MAX_INSTANCES:-0}
+      # Optional: caps the combined cpu (cores) / memory (MB) reserved across
+      # every instance on the host, enforced on create and on live resize —
+      # WHARF_MAX_INSTANCES alone doesn't stop one instance from resizing its
+      # way to 16 cores/32GB. 0 or unset = no cap on that dimension.
+      WHARF_MAX_TOTAL_CPU: ${WHARF_MAX_TOTAL_CPU:-0}
+      WHARF_MAX_TOTAL_MEMORY_MB: ${WHARF_MAX_TOTAL_MEMORY_MB:-0}
       # Optional: enables the "ask your data" natural-language query feature via
       # OpenRouter (https://openrouter.ai), letting each user pick their own model
       # in Settings. Leave unset to keep it off — the UI shows a hint instead.

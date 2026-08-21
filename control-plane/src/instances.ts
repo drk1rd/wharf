@@ -53,6 +53,45 @@ export function internalConnectionString(row: InstanceRow): string | null {
 // disables the cap — fine for a single-user local/dev setup.
 const MAX_INSTANCES = Number(process.env.WHARF_MAX_INSTANCES ?? 0);
 
+// Instance count alone doesn't protect a shared host: live resize (below)
+// lets any single instance grow up to 16 cores / 32GB with no ceiling of its
+// own, so a handful of resizes can still starve the box even under a low
+// count cap. These are the aggregate budget across every instance combined —
+// each independently optional, 0/unset disables that one.
+const MAX_TOTAL_CPU = Number(process.env.WHARF_MAX_TOTAL_CPU ?? 0);
+const MAX_TOTAL_MEMORY_MB = Number(process.env.WHARF_MAX_TOTAL_MEMORY_MB ?? 0);
+
+/** Sums cpu/memory currently reserved across every instance, excluding errored ones (no real allocation) and, optionally, one about to be resized (whose existing reservation is being replaced, not added to). */
+function reservedResources(excludeId?: string): { cpu: number; memoryMb: number } {
+  let cpu = 0;
+  let memoryMb = 0;
+  for (const row of instancesRepo.list()) {
+    if (row.status === "error" || row.id === excludeId) continue;
+    cpu += parseFloat(row.cpu);
+    memoryMb += row.memory_mb;
+  }
+  return { cpu, memoryMb };
+}
+
+function assertWithinResourceBudget(requestedCpu: number, requestedMemoryMb: number, excludeId?: string): void {
+  if (MAX_TOTAL_CPU <= 0 && MAX_TOTAL_MEMORY_MB <= 0) return;
+  const reserved = reservedResources(excludeId);
+  if (MAX_TOTAL_CPU > 0 && reserved.cpu + requestedCpu > MAX_TOTAL_CPU) {
+    const err = new Error(
+      `this would exceed the host's total CPU budget (${MAX_TOTAL_CPU} cores) — ${reserved.cpu} already reserved, ${requestedCpu} requested`
+    );
+    (err as Error & { status?: number }).status = 429;
+    throw err;
+  }
+  if (MAX_TOTAL_MEMORY_MB > 0 && reserved.memoryMb + requestedMemoryMb > MAX_TOTAL_MEMORY_MB) {
+    const err = new Error(
+      `this would exceed the host's total memory budget (${MAX_TOTAL_MEMORY_MB} MB) — ${reserved.memoryMb} already reserved, ${requestedMemoryMb} requested`
+    );
+    (err as Error & { status?: number }).status = 429;
+    throw err;
+  }
+}
+
 export async function createInstance(name: string, engine: string, ownerId: string | null, version?: string): Promise<InstanceRow> {
   if (MAX_INSTANCES > 0 && instancesRepo.list().length >= MAX_INSTANCES) {
     const err = new Error(`this Wharf instance is at its limit of ${MAX_INSTANCES} databases — delete one before creating another`);
@@ -63,6 +102,8 @@ export async function createInstance(name: string, engine: string, ownerId: stri
   const manifest = getManifest(engine);
   if (!manifest) throw new Error(`unknown engine: ${engine}`);
   const resolvedVersion = version && manifest.versions.includes(version) ? version : manifest.defaultVersion;
+
+  assertWithinResourceBudget(parseFloat(manifest.resourceDefaults.cpu), manifest.resourceDefaults.memoryMb);
 
   const id = randomUUID();
   const secrets = manifest.makeSecrets(id);
@@ -187,6 +228,12 @@ export async function resizeInstance(id: string, auth: AuthContext, opts: { cpu?
   if (opts.cpu === undefined && opts.memoryMb === undefined) {
     badRequest("provide cpu and/or memoryMb to resize");
   }
+
+  assertWithinResourceBudget(
+    opts.cpu !== undefined ? parseFloat(opts.cpu) : parseFloat(row.cpu),
+    opts.memoryMb !== undefined ? opts.memoryMb : row.memory_mb,
+    id
+  );
 
   await updateContainerResources(row.container_id as string, opts);
   instancesRepo.update(id, {
