@@ -98,7 +98,13 @@ function assertWithinResourceBudget(requestedCpu: number, requestedMemoryMb: num
   }
 }
 
-export async function createInstance(name: string, engine: string, ownerId: string | null, version?: string): Promise<InstanceRow> {
+export async function createInstance(
+  name: string,
+  engine: string,
+  ownerId: string | null,
+  version?: string,
+  opts: { seed?: boolean } = {}
+): Promise<InstanceRow> {
   if (MAX_INSTANCES > 0 && instancesRepo.list().length >= MAX_INSTANCES) {
     const err = new Error(`this Wharf instance is at its limit of ${MAX_INSTANCES} databases — delete one before creating another`);
     (err as Error & { status?: number }).status = 429;
@@ -135,7 +141,7 @@ export async function createInstance(name: string, engine: string, ownerId: stri
   instancesRepo.insert(row);
 
   // Provision in the background — the client polls GET /api/instances/:id for status.
-  void provision(id, manifest, resolvedVersion, secrets);
+  void provision(id, manifest, resolvedVersion, secrets, opts.seed ?? true);
 
   return row;
 }
@@ -170,7 +176,7 @@ async function waitForAdapterReady(
   throw lastErr instanceof Error ? lastErr : new Error("engine did not become query-ready in time");
 }
 
-async function provision(id: string, manifest: ServiceManifest, version: string, secrets: InstanceSecrets): Promise<void> {
+async function provision(id: string, manifest: ServiceManifest, version: string, secrets: InstanceSecrets, seed: boolean): Promise<void> {
   try {
     const { containerId, volumeName, hostPort } = await createInstanceContainer({
       instanceId: id,
@@ -186,7 +192,7 @@ async function provision(id: string, manifest: ServiceManifest, version: string,
     const connectionString = manifest.connectionString(secrets, PROBE_HOST, hostPort);
     await waitForAdapterReady(manifest.browserAdapter, connectionString);
 
-    if (SEED_SAMPLE_DATA) {
+    if (SEED_SAMPLE_DATA && seed) {
       // Best-effort: a fresh instance still counts as successfully provisioned
       // even if seeding fails for some reason — sample data is a convenience,
       // not something worth failing the whole instance over.
@@ -292,7 +298,14 @@ export async function createBranch(sourceId: string, auth: AuthContext, name?: s
 
   const backup = await createBackup(source);
   const branchName = name?.trim() || `${source.name}-branch-${Date.now()}`;
-  const branch = await createInstance(branchName, source.engine, source.owner_id, source.version);
+  // seed: false — the branch's data is about to come entirely from the
+  // restore below. Sample data seeded here first would create the same
+  // tables the dump also creates, and the restore's CREATE TABLE/INSERT
+  // statements would then collide with it (found for real in CI: the
+  // branch silently ended up with its own 3 seeded rows instead of the
+  // source's 4, since psql doesn't abort on a per-statement error by
+  // default, so the colliding restore "succeeded" while doing nothing).
+  const branch = await createInstance(branchName, source.engine, source.owner_id, source.version, { seed: false });
 
   try {
     const ready = await waitForInstanceRunning(branch.id);
