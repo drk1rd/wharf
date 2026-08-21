@@ -299,6 +299,12 @@ h2 {
   margin-bottom: 4px;
 }
 
+.create-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
 .checkbox-row {
   display: flex;
   align-items: center;

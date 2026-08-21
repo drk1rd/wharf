@@ -582,3 +582,15 @@ Asked directly: split the data browser (table list, filters, row editing, the qu
 **Verified live in a real browser**: Playwright with request interception standing in for a real (Docker-free) instance and its data — caught and fixed a bug in the *test setup* along the way, not the app: an over-broad `/api/config` mock hardcoded `needsSetup: false`, which meant the setup wizard's `needsSetup: true` fresh-instance path never rendered during the test and every login attempt failed with "invalid email or password" against an account that had never actually been created. Once fixed (stop mocking `/api/config`, let the real server answer it), the run showed exactly what was asked for: Simple with only Connect + Ask, a Data tab with the table list, filter builder, editable rows, and query editor all with real room, and a Dashboard stats strip that reads as considered rather than sparse.
 
 **Verified before pushing**: `npm run typecheck` and `npm run build` pass for web; control-plane untouched by this pass.
+
+## 30. A real create form, with an Auto path preserved for anyone who doesn't want one
+
+Asked directly: creating a database should be able to take real inputs (name, and so on) rather than always auto-generating one — but keep a one-click "Auto" path available too, explicitly named for the "vibe coder" persona this product has targeted since §5.
+
+**Two paths, one toggle, not two different flows to maintain** (`Dashboard.tsx`): a new **Auto** switch sits next to the existing TLS one, defaulting **on** — clicking an engine card behaves exactly as it always has (instant creation, a generated name, the current TLS default), so nobody who's used this before sees any change unless they go looking for one. Turning Auto off changes what a card click *does*, not what it *is*: the same click now opens `CreateInstanceModal` — name (editable, still pre-filled with a sensible generated default so an empty field never blocks creation), version (a real `<select>` from the engine's own supported list, only shown when there's more than one to choose from), and TLS (seeded from the deployment default, disabled with an explanatory `title` for engines that don't support it yet) — before calling the same `createInstance` function either path ends up at. The card's own CTA text reflects which mode is active ("Create instance →" vs "Configure →"), so the button's behavior is never a surprise.
+
+Persisted per-browser (`localStorage`, not a deployment setting) since it's a personal workflow preference, not something one person should be able to change for everyone else on a shared instance.
+
+**Verified live in a real browser**: Playwright with request interception on `POST /api/instances` specifically to inspect the actual payload each path sends, not just that a click "did something" — confirmed Auto-on sends a generated name and closes with no modal ever appearing, and Auto-off opens the modal, accepts a real typed name, and sends exactly that name plus the selected version and TLS choice.
+
+**Verified before pushing**: `npm run typecheck` and `npm run build` pass for web; control-plane untouched by this pass.

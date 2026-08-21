@@ -18,10 +18,85 @@ function DbIcon() {
   );
 }
 
+function defaultNameFor(engineId: string): string {
+  return `${engineId}-${Date.now()}`;
+}
+
+/**
+ * Opens on an engine card click when Auto is off — a real create form
+ * (name, version, TLS) rather than only ever accepting an auto-generated
+ * name. Kept intentionally small: three fields, no resource sizing here
+ * (that's a post-create resize on the instance page, already live) — this
+ * is "name it and pick a version," not a full provisioning wizard.
+ */
+function CreateInstanceModal({
+  engine,
+  defaultTls,
+  onCancel,
+  onCreate,
+}: {
+  engine: Engine;
+  defaultTls: boolean;
+  onCancel: () => void;
+  onCreate: (name: string, version: string, tls: boolean) => void;
+}) {
+  const [name, setName] = useState(defaultNameFor(engine.id));
+  const [version, setVersion] = useState(engine.defaultVersion);
+  const [tls, setTls] = useState(defaultTls && engine.tlsSupported);
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    onCreate(name.trim() || defaultNameFor(engine.id), version, tls);
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+        <h3>New {engine.displayName} instance</h3>
+        <form onSubmit={submit}>
+          <label className="field-label">
+            Name
+            <input type="text" className="model-filter" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </label>
+          {engine.versions.length > 1 && (
+            <label className="field-label">
+              Version
+              <select className="model-filter" value={version} onChange={(e) => setVersion(e.target.value)}>
+                {engine.versions.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label
+            className="checkbox-row"
+            style={{ marginBottom: 18, opacity: engine.tlsSupported ? 1 : 0.5 }}
+            title={engine.tlsSupported ? "Encrypt the connection with a certificate signed by this deployment's own CA." : "TLS isn't supported for this engine yet."}
+          >
+            <input type="checkbox" checked={tls} disabled={!engine.tlsSupported} onChange={(e) => setTls(e.target.checked)} />
+            Use TLS
+          </label>
+          <div className="modal-actions">
+            <button type="button" onClick={onCancel}>
+              Cancel
+            </button>
+            <button type="submit" className="primary">
+              Create instance
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [instances, setInstances] = useState<Instance[] | null>(null);
   const [engines, setEngines] = useState<Engine[]>([]);
   const [creating, setCreating] = useState<string | null>(null);
+  const [configuring, setConfiguring] = useState<Engine | null>(null);
   // One toggle for the whole card grid, not a per-engine option — TLS is a
   // create-time-only choice anyway (see PLAN.md), so a single "use TLS for
   // whatever I create next" switch stays true to the "not that complex"
@@ -29,8 +104,21 @@ export default function Dashboard() {
   // deployment default set in Settings/the setup wizard; engines with no
   // TLS support (Redis, ClickHouse) just ignore it.
   const [tlsWanted, setTlsWanted] = useState(false);
+  // Auto defaults on: a click still creates instantly with a generated
+  // name, exactly like before this feature existed — the target audience
+  // for this whole product includes people who just want a URL, not a
+  // form to fill out first. Turning it off is what surfaces the create
+  // form (name, version, TLS) for anyone who wants to name things
+  // themselves. Persisted per-browser since it's a personal preference,
+  // not deployment config.
+  const [autoMode, setAutoMode] = useState(() => localStorage.getItem("wharf-auto-create") !== "false");
   const navigate = useNavigate();
   const toast = useToast();
+
+  function toggleAutoMode(next: boolean) {
+    setAutoMode(next);
+    localStorage.setItem("wharf-auto-create", String(next));
+  }
 
   async function refresh() {
     try {
@@ -49,16 +137,24 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleCreate(engine: Engine) {
+  async function createInstance(engine: Engine, name: string, version: string, tls: boolean) {
     setCreating(engine.id);
     try {
-      const instance = await api.createInstance(`${engine.id}-${Date.now()}`, engine.id, engine.defaultVersion, tlsWanted);
+      const instance = await api.createInstance(name, engine.id, version, tls);
       await refresh();
       navigate(`/instances/${instance.id}`);
     } catch (err) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setCreating(null);
+    }
+  }
+
+  function handleCardClick(engine: Engine) {
+    if (autoMode) {
+      createInstance(engine, defaultNameFor(engine.id), engine.defaultVersion, tlsWanted);
+    } else {
+      setConfiguring(engine);
     }
   }
 
@@ -92,10 +188,19 @@ export default function Dashboard() {
       <section className="section">
         <div className="section-heading-row">
           <h2>New database</h2>
-          <label className="checkbox-row tls-toggle" title="Encrypt the connection with a certificate signed by this deployment's own CA. Not every engine supports it yet.">
-            <input type="checkbox" checked={tlsWanted} onChange={(e) => setTlsWanted(e.target.checked)} />
-            Use TLS
-          </label>
+          <div className="create-mode-controls">
+            <label
+              className="checkbox-row"
+              title={autoMode ? "Click a card to create instantly with a generated name." : "Click a card to name it and pick a version first."}
+            >
+              <input type="checkbox" checked={autoMode} onChange={(e) => toggleAutoMode(e.target.checked)} />
+              Auto
+            </label>
+            <label className="checkbox-row tls-toggle" title="Encrypt the connection with a certificate signed by this deployment's own CA. Not every engine supports it yet.">
+              <input type="checkbox" checked={tlsWanted} onChange={(e) => setTlsWanted(e.target.checked)} />
+              Use TLS
+            </label>
+          </div>
         </div>
         <div className="engine-cards">
           {engines.length === 0
@@ -104,7 +209,7 @@ export default function Dashboard() {
                 <button
                   key={engine.id}
                   className="engine-card"
-                  onClick={() => handleCreate(engine)}
+                  onClick={() => handleCardClick(engine)}
                   disabled={creating !== null}
                 >
                   <span className="engine-icon">
@@ -120,14 +225,29 @@ export default function Dashboard() {
                       <>
                         <span className="spinner" /> Creating…
                       </>
-                    ) : (
+                    ) : autoMode ? (
                       "Create instance →"
+                    ) : (
+                      "Configure →"
                     )}
                   </span>
                 </button>
               ))}
         </div>
       </section>
+
+      {configuring && (
+        <CreateInstanceModal
+          engine={configuring}
+          defaultTls={tlsWanted}
+          onCancel={() => setConfiguring(null)}
+          onCreate={(name, version, tls) => {
+            const engine = configuring;
+            setConfiguring(null);
+            createInstance(engine, name, version, tls);
+          }}
+        />
+      )}
 
       <section className="section">
         <h2>Instances</h2>
