@@ -250,6 +250,16 @@ h2 {
   transition: background 0.1s ease;
 }
 
+.audit-detail {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .row-link:hover {
   background: var(--panel-2);
 }

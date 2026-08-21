@@ -12,7 +12,7 @@ export type AuthContext =
   | { kind: "admin" }
   | { kind: "anonymous" }
   | { kind: "user"; userId: string }
-  | { kind: "scoped"; instanceId: string; scope: "read" | "write" };
+  | { kind: "scoped"; instanceId: string; scope: "read" | "write"; tokenId: string };
 
 declare global {
   namespace Express {
@@ -103,12 +103,12 @@ export function revokeApiToken(id: string, instanceId: string): void {
   apiTokensRepo.remove(id, instanceId);
 }
 
-function resolveApiToken(presented: string): { instanceId: string; scope: "read" | "write" } | null {
+function resolveApiToken(presented: string): { instanceId: string; scope: "read" | "write"; tokenId: string } | null {
   if (!presented.startsWith(API_TOKEN_PREFIX)) return null;
   const row = apiTokensRepo.getByHash(hashToken(presented));
   if (!row) return null;
   apiTokensRepo.touch(row.id, new Date().toISOString());
-  return { instanceId: row.instance_id, scope: row.scope };
+  return { instanceId: row.instance_id, scope: row.scope, tokenId: row.id };
 }
 
 /** Throws (403) for a read-scoped token attempting to mutate — every route that writes calls this once req.auth is known. Every other kind (admin/anonymous/user, and write-scoped tokens) is unrestricted here; whether the caller may touch this *particular* instance at all is canAccessInstance's job, not this one's. */
@@ -132,7 +132,7 @@ export function identify(req: Request, _res: Response, next: NextFunction): void
   if (provided) {
     const scoped = resolveApiToken(provided);
     if (scoped) {
-      req.auth = { kind: "scoped", instanceId: scoped.instanceId, scope: scoped.scope };
+      req.auth = { kind: "scoped", instanceId: scoped.instanceId, scope: scoped.scope, tokenId: scoped.tokenId };
       next();
       return;
     }

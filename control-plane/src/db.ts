@@ -72,6 +72,18 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_at TEXT,
   FOREIGN KEY (instance_id) REFERENCES instances(id)
 );
+
+-- No FOREIGN KEY here, unlike the tables above: a "delete" entry must
+-- survive the instance row it refers to being removed, or the audit trail
+-- would lose the one event that matters most to have a record of.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  instance_id TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  detail TEXT,
+  created_at TEXT NOT NULL
+);
 `);
 
 // owner_id was added after instances first shipped — add it for anyone
@@ -139,6 +151,15 @@ export interface ApiTokenRow {
   name: string | null;
   created_at: string;
   last_used_at: string | null;
+}
+
+export interface AuditLogRow {
+  id: string;
+  instance_id: string;
+  actor: string;
+  action: string;
+  detail: string | null;
+  created_at: string;
 }
 
 export const usersRepo = {
@@ -280,5 +301,19 @@ export const apiTokensRepo = {
   },
   removeForInstance(instanceId: string) {
     db.prepare(`DELETE FROM api_tokens WHERE instance_id = ?`).run(instanceId);
+  },
+};
+
+export const auditLogRepo = {
+  insert(row: AuditLogRow) {
+    db.prepare(
+      `INSERT INTO audit_log (id, instance_id, actor, action, detail, created_at)
+       VALUES (@id, @instance_id, @actor, @action, @detail, @created_at)`
+    ).run(row);
+  },
+  listForInstance(instanceId: string, limit = 200): AuditLogRow[] {
+    return db
+      .prepare(`SELECT * FROM audit_log WHERE instance_id = ? ORDER BY created_at DESC LIMIT ?`)
+      .all(instanceId, limit) as AuditLogRow[];
   },
 };

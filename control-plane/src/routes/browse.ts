@@ -6,6 +6,7 @@ import { askEnabled, generateQuery, listModels } from "../ask.js";
 import { usersRepo } from "../db.js";
 import { parseCsv, parseJsonRows } from "../import.js";
 import { requireWriteAccess, type AuthContext } from "../auth.js";
+import { recordAudit } from "../audit.js";
 
 export const browseRouter = Router();
 
@@ -60,7 +61,9 @@ browseRouter.post("/instances/:id/browse/query", async (req, res) => {
       res.status(400).json({ error: "query is required" });
       return;
     }
-    res.json(await adapter.runQuery(connectionString, query));
+    const result = await adapter.runQuery(connectionString, query);
+    recordAudit(req.params.id, req.auth!, "query", query.length > 200 ? `${query.slice(0, 200)}…` : query);
+    res.json(result);
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 500;
     res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
@@ -99,6 +102,7 @@ browseRouter.post("/instances/:id/browse/import", async (req, res) => {
       return;
     }
     const result = await adapter.importRows(connectionString, target, rows);
+    recordAudit(req.params.id, req.auth!, "import", `format=${format} target=${target || "-"} inserted=${result.inserted}`);
     res.status(201).json(result);
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 400;

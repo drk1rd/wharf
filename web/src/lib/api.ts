@@ -44,6 +44,13 @@ export interface Instance {
   backupSchedule: { intervalHours: number; retentionCount: number; lastRunAt: string | null } | null;
 }
 
+export interface AuditLogEntry {
+  actor: string;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+}
+
 export interface ApiToken {
   id: string;
   scope: "read" | "write";
@@ -154,4 +161,5 @@ export const api = {
       body: JSON.stringify({ scope, name: name || undefined }),
     }),
   revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
+  listAuditLog: (id: string) => request<AuditLogEntry[]>(`/instances/${id}/audit-log`),
 };

@@ -5,6 +5,7 @@ import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, r
 import { getContainerLogs, getContainerStats } from "../docker.js";
 import { backupSupported, createBackup, getBackupSchedule, listBackups, restoreBackup, setBackupSchedule } from "../backups.js";
 import { listApiTokens, mintApiToken, ownerIdFor, requireWriteAccess, revokeApiToken } from "../auth.js";
+import { listAuditLog, recordAudit } from "../audit.js";
 
 export const instancesRouter = Router();
 
@@ -102,6 +103,12 @@ instancesRouter.delete("/instances/:id", async (req, res) => {
   try {
     requireWriteAccess(req.auth!);
     await deleteInstance(req.params.id, req.auth!);
+    // Recorded after, not before: deleteInstance() itself still validates
+    // ownership and does the real work, so a request that never actually
+    // deletes anything (bad id, no access) must never leave a "delete"
+    // entry behind. audit_log has no FK on instance_id specifically so this
+    // still works once the instance row is already gone.
+    recordAudit(req.params.id, req.auth!, "delete");
     res.status(204).end();
   } catch (err) {
     respondError(res, err);
@@ -121,6 +128,7 @@ instancesRouter.patch("/instances/:id/resize", async (req, res) => {
       return;
     }
     const row = await resizeInstance(req.params.id, req.auth!, { cpu, memoryMb });
+    recordAudit(req.params.id, req.auth!, "resize", `cpu=${cpu ?? "-"} memoryMb=${memoryMb ?? "-"}`);
     res.json(publicInstance(row));
   } catch (err) {
     respondError(res, err);
@@ -153,6 +161,7 @@ instancesRouter.post("/instances/:id/backups", async (req, res) => {
     requireWriteAccess(req.auth!);
     const row = requireRunningInstance(req.params.id, req.auth!);
     const backup = await createBackup(row);
+    recordAudit(req.params.id, req.auth!, "backup.create", `${backup.size_bytes} bytes`);
     res.status(201).json(backup);
   } catch (err) {
     respondError(res, err);
@@ -163,6 +172,26 @@ instancesRouter.get("/instances/:id/backups", (req, res) => {
   try {
     requireOwnedInstance(req.params.id, req.auth!);
     res.json(listBackups(req.params.id));
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+instancesRouter.get("/instances/:id/audit-log", (req, res) => {
+  try {
+    requireOwnedInstance(req.params.id, req.auth!);
+    if (req.auth!.kind === "scoped") {
+      res.status(403).json({ error: "a scoped token can't view its own instance's audit log" });
+      return;
+    }
+    res.json(
+      listAuditLog(req.params.id).map((entry) => ({
+        actor: entry.actor,
+        action: entry.action,
+        detail: entry.detail,
+        createdAt: entry.created_at,
+      }))
+    );
   } catch (err) {
     respondError(res, err);
   }
@@ -182,6 +211,12 @@ instancesRouter.patch("/instances/:id/backup-schedule", async (req, res) => {
       return;
     }
     const schedule = setBackupSchedule(req.params.id, intervalHours, retentionCount ?? 0);
+    recordAudit(
+      req.params.id,
+      req.auth!,
+      "backup-schedule.set",
+      intervalHours === null ? "disabled" : `every ${intervalHours}h, keep ${retentionCount}`
+    );
     res.json(toPublicSchedule(schedule));
   } catch (err) {
     respondError(res, err);
@@ -198,6 +233,7 @@ instancesRouter.post("/instances/:id/restore", async (req, res) => {
       return;
     }
     await restoreBackup(row, backupId);
+    recordAudit(req.params.id, req.auth!, "backup.restore", backupId);
     res.status(204).end();
   } catch (err) {
     respondError(res, err);
@@ -221,6 +257,7 @@ instancesRouter.post("/instances/:id/tokens", (req, res) => {
       return;
     }
     const { token, row: tokenRow } = mintApiToken(row.id, scope, typeof name === "string" && name.trim() ? name.trim() : null);
+    recordAudit(row.id, req.auth!, "token.mint", `scope=${scope}${tokenRow.name ? ` name=${tokenRow.name}` : ""}`);
     res.status(201).json({
       // The only time the plaintext token is ever returned — only its hash
       // is stored, so this response is the caller's one chance to see it.
@@ -264,6 +301,7 @@ instancesRouter.delete("/instances/:id/tokens/:tokenId", (req, res) => {
       return;
     }
     revokeApiToken(req.params.tokenId, req.params.id);
+    recordAudit(req.params.id, req.auth!, "token.revoke", req.params.tokenId);
     res.status(204).end();
   } catch (err) {
     respondError(res, err);

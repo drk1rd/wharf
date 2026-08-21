@@ -1,6 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, type ApiToken, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
+import {
+  api,
+  type ApiToken,
+  type AskResult,
+  type AuditLogEntry,
+  type BrowseObject,
+  type ContainerStats,
+  type Instance,
+  type OpenRouterModel,
+  type QueryResult,
+} from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
 import { downloadResultAsCsv, downloadResultAsJson } from "../lib/export";
 import { useToast } from "../components/Toast";
@@ -609,9 +619,14 @@ function AdvancedView({ instance }: { instance: Instance }) {
   const [tokenScope, setTokenScope] = useState<"read" | "write">("read");
   const [minting, setMinting] = useState(false);
   const [justMinted, setJustMinted] = useState<string | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
 
   const refreshTokens = useCallback(() => {
     api.listTokens(instance.id).then(setTokens).catch(() => undefined);
+  }, [instance.id]);
+
+  const refreshAuditLog = useCallback(() => {
+    api.listAuditLog(instance.id).then(setAuditLog).catch(() => undefined);
   }, [instance.id]);
 
   const refreshBackups = useCallback(() => {
@@ -638,9 +653,10 @@ function AdvancedView({ instance }: { instance: Instance }) {
     poll();
     refreshBackups();
     refreshTokens();
+    refreshAuditLog();
     const interval = setInterval(poll, 4000);
     return () => clearInterval(interval);
-  }, [instance.id, refreshBackups, refreshTokens]);
+  }, [instance.id, refreshBackups, refreshTokens, refreshAuditLog]);
 
   async function handleResize() {
     setResizing(true);
@@ -937,6 +953,34 @@ function AdvancedView({ instance }: { instance: Instance }) {
                       Revoke
                     </button>
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      <section className="panel">
+        <h2>Activity</h2>
+        {auditLog.length === 0 ? (
+          <p className="empty">No activity recorded yet.</p>
+        ) : (
+          <table className="instance-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Who</th>
+                <th>Action</th>
+                <th>Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditLog.map((entry, i) => (
+                <tr key={i}>
+                  <td>{new Date(entry.createdAt).toLocaleString()}</td>
+                  <td>{entry.actor}</td>
+                  <td>{entry.action}</td>
+                  <td className="audit-detail">{entry.detail ?? ""}</td>
                 </tr>
               ))}
             </tbody>
