@@ -121,6 +121,21 @@ export const redisAdapter: BrowserAdapter = {
     });
   },
 
+  /** Redis has no table/collection to import into — each row is `{ key, value }` and `target` is unused. */
+  async importRows(connectionString, _target, rows): Promise<{ inserted: number }> {
+    return withClient(connectionString, async (client) => {
+      let inserted = 0;
+      for (const row of rows) {
+        const key = row.key;
+        if (typeof key !== "string" || !key) continue;
+        const value = row.value;
+        await client.set(key, typeof value === "string" ? value : JSON.stringify(value ?? ""));
+        inserted++;
+      }
+      return { inserted };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withClient(connectionString, async (client) => {
       await client.set("session:demo", "example-session-token");

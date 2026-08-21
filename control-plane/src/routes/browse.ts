@@ -4,6 +4,7 @@ import { getBrowserAdapter } from "../browser/registry.js";
 import { getManifest } from "../manifests/registry.js";
 import { askEnabled, generateQuery, listModels } from "../ask.js";
 import { usersRepo } from "../db.js";
+import { parseCsv, parseJsonRows } from "../import.js";
 import type { AuthContext } from "../auth.js";
 
 export const browseRouter = Router();
@@ -57,6 +58,44 @@ browseRouter.post("/instances/:id/browse/query", async (req, res) => {
     res.json(await adapter.runQuery(connectionString, query));
   } catch (err) {
     const status = (err as Error & { status?: number }).status ?? 500;
+    res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+browseRouter.post("/instances/:id/browse/import", async (req, res) => {
+  try {
+    const { adapter, connectionString, engine } = adapterFor(req.params.id, req.auth!);
+    if (!adapter.importRows) {
+      res.status(400).json({ error: `import isn't supported for ${engine} yet` });
+      return;
+    }
+    const { format, data } = req.body ?? {};
+    let { target } = req.body ?? {};
+    if (typeof data !== "string" || !data.trim()) {
+      res.status(400).json({ error: "data is required" });
+      return;
+    }
+    if (format !== "csv" && format !== "json") {
+      res.status(400).json({ error: 'format must be "csv" or "json"' });
+      return;
+    }
+    if (engine === "redis") {
+      // No table/collection concept — target is unused, but importRows still needs a string.
+      target = target ?? "";
+    } else if (typeof target !== "string" || !target.trim()) {
+      res.status(400).json({ error: "target (table/collection name) is required" });
+      return;
+    }
+
+    const rows = format === "csv" ? parseCsv(data) : parseJsonRows(data);
+    if (rows.length === 0) {
+      res.json({ inserted: 0 });
+      return;
+    }
+    const result = await adapter.importRows(connectionString, target, rows);
+    res.status(201).json(result);
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status ?? 400;
     res.status(status).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });

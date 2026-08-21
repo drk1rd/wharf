@@ -55,6 +55,22 @@ export const mysqlAdapter: BrowserAdapter = {
     });
   },
 
+  async importRows(connectionString, target, rows): Promise<{ inserted: number }> {
+    if (rows.length === 0) return { inserted: 0 };
+    const table = quoteIdent(target);
+    const columns = Object.keys(rows[0]);
+    const quotedCols = columns.map(quoteIdent).join(", ");
+    const placeholders = columns.map(() => "?").join(", ");
+    return withConnection(connectionString, async (conn) => {
+      let inserted = 0;
+      for (const row of rows) {
+        await conn.query(`INSERT INTO ${table} (${quotedCols}) VALUES (${placeholders})`, columns.map((c) => row[c]));
+        inserted++;
+      }
+      return { inserted };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withConnection(connectionString, async (conn) => {
       await conn.query(`

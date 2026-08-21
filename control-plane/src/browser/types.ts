@@ -40,4 +40,13 @@ export interface BrowserAdapter {
    * find-only restriction).
    */
   seedSampleData?(connectionString: string): Promise<void>;
+  /**
+   * Inserts already-parsed rows/documents into an existing table/collection
+   * (MongoDB creates one implicitly on first insert; SQL engines require it
+   * to already exist — see manifests' seedSampleData or the user's own
+   * CREATE TABLE). `target` is the table/collection name for every engine
+   * except Redis, where each row is instead `{ key, value }` and `target`
+   * is unused — Redis has no table/collection concept to import into.
+   */
+  importRows?(connectionString: string, target: string, rows: Record<string, unknown>[]): Promise<{ inserted: number }>;
 }

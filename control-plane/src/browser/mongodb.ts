@@ -62,6 +62,14 @@ export const mongodbAdapter: BrowserAdapter = {
     });
   },
 
+  async importRows(connectionString, target, rows): Promise<{ inserted: number }> {
+    if (rows.length === 0) return { inserted: 0 };
+    return withClient(connectionString, async (client) => {
+      const res = await client.db().collection(target).insertMany(rows);
+      return { inserted: res.insertedCount };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withClient(connectionString, async (client) => {
       const db = client.db();

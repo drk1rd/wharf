@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, type AskResult, type BrowseObject, type ContainerStats, type Instance, type OpenRouterModel, type QueryResult } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
@@ -417,12 +417,19 @@ function BrowsePanel({ instance }: { instance: Instance }) {
   const [queryText, setQueryText] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
   const [running, setRunning] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importTarget, setImportTarget] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const label = instance.engine === "mongodb" ? "Collections" : instance.engine === "redis" ? "Keys" : "Tables";
   const singular = instance.engine === "mongodb" ? "collection" : instance.engine === "redis" ? "key" : "table";
 
-  useEffect(() => {
+  const refreshObjects = useCallback(() => {
     api.listObjects(instance.id).then(setObjects).catch(() => setObjects([]));
   }, [instance.id]);
+
+  useEffect(() => {
+    refreshObjects();
+  }, [refreshObjects]);
 
   async function openObject(obj: BrowseObject) {
     setSelected(obj);
@@ -444,12 +451,58 @@ function BrowsePanel({ instance }: { instance: Instance }) {
     }
   }
 
+  async function handleImportFile(file: File) {
+    if (instance.engine !== "redis" && !importTarget.trim()) {
+      toast.push(`Enter a ${singular} name before importing.`, "error");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    const format = file.name.toLowerCase().endsWith(".json") ? "json" : "csv";
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const result = await api.importData(instance.id, format, importTarget.trim(), text);
+      toast.push(`Imported ${result.inserted} row${result.inserted === 1 ? "" : "s"}.`, "success");
+      refreshObjects();
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <section className="panel">
       <h2>Browse data</h2>
       <div className="browse-layout">
         <div className="object-list">
           <h3>{label}</h3>
+          <div className="import-row">
+            {instance.engine !== "redis" && (
+              <input
+                type="text"
+                className="import-target"
+                placeholder={`${singular} name`}
+                value={importTarget}
+                onChange={(e) => setImportTarget(e.target.value)}
+                disabled={importing}
+              />
+            )}
+            <label className={`ghost import-button${importing ? " disabled" : ""}`}>
+              {importing ? "Importing…" : "Import CSV/JSON"}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json"
+                disabled={importing}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImportFile(file);
+                }}
+              />
+            </label>
+          </div>
           {objects.length === 0 && <p className="empty">No {label.toLowerCase()} yet.</p>}
           <ul>
             {objects.map((obj) => (

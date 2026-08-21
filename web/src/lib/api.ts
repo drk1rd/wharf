@@ -128,4 +128,9 @@ export const api = {
     request<AskResult>(`/instances/${id}/ask`, { method: "POST", body: JSON.stringify({ question, model }) }),
   resizeInstance: (id: string, cpu: string, memoryMb: number) =>
     request<Instance>(`/instances/${id}/resize`, { method: "PATCH", body: JSON.stringify({ cpu, memoryMb }) }),
+  importData: (id: string, format: "csv" | "json", target: string, data: string) =>
+    request<{ inserted: number }>(`/instances/${id}/browse/import`, {
+      method: "POST",
+      body: JSON.stringify({ format, target, data }),
+    }),
 };

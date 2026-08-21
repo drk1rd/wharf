@@ -123,6 +123,20 @@ export const clickhouseAdapter: BrowserAdapter = {
     return Buffer.from(JSON.stringify({ format: "wharf-clickhouse-dump-v2", tables: bundle }), "utf8");
   },
 
+  async importRows(connectionString, target, rows): Promise<{ inserted: number }> {
+    if (rows.length === 0) return { inserted: 0 };
+    const { origin, user, password, database } = parseConnection(connectionString);
+    const body = rows.map((r) => JSON.stringify(r)).join("\n");
+    const url = `${origin}/?database=${encodeURIComponent(database)}&user=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}&query=${encodeURIComponent(
+      `INSERT INTO ${quoteIdent(target)} FORMAT JSONEachRow`
+    )}`;
+    const res = await fetch(url, { method: "POST", body });
+    if (!res.ok) {
+      throw new Error(`import failed (${res.status}): ${(await res.text()).slice(0, 500)}`);
+    }
+    return { inserted: rows.length };
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     await query(
       connectionString,

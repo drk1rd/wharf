@@ -49,6 +49,18 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   assert.equal(seeded.status, 200);
   assert.equal(Number(seeded.body.rows[0].n), 3);
 
+  // CSV import into the seeded table — the columns come straight from the
+  // CSV header, so id/created_at are correctly left out (SERIAL + DEFAULT).
+  const imported = await client.post(`/api/instances/${instance.id}/browse/import`, {
+    format: "csv",
+    target: "customers",
+    data: "name,email\nImported User,imported@example.com",
+  });
+  assert.equal(imported.status, 201);
+  assert.equal(imported.body.inserted, 1);
+  const afterImport = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
+  assert.equal(Number(afterImport.body.rows[0].n), 4);
+
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 1 AS one" });
   assert.equal(query.status, 200);
   assert.equal(query.body.rows[0].one, 1);
@@ -103,6 +115,18 @@ test("mongodb: create, connect, browse, query, backup", { skip, timeout: 150_000
   assert.equal(seeded.status, 200);
   assert.equal(seeded.body.rows.length, 3);
 
+  const imported = await client.post(`/api/instances/${instance.id}/browse/import`, {
+    format: "json",
+    target: "customers",
+    data: JSON.stringify([{ name: "Imported User", email: "imported@example.com" }]),
+  });
+  assert.equal(imported.status, 201);
+  assert.equal(imported.body.inserted, 1);
+  const afterImport = await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: JSON.stringify({ collection: "customers", filter: {} }),
+  });
+  assert.equal(afterImport.body.rows.length, 4);
+
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, {
     query: JSON.stringify({ collection: "nonexistent", filter: {} }),
   });
@@ -126,6 +150,16 @@ test("redis: create, connect, run commands, backup and restore round-trip", { sk
   const get = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "GET testkey" });
   assert.equal(get.status, 200);
   assert.equal(get.body.rows[0], "hello");
+
+  // JSON import — {key, value} pairs, since redis has no table/collection concept.
+  const imported = await client.post(`/api/instances/${instance.id}/browse/import`, {
+    format: "json",
+    data: JSON.stringify([{ key: "imported:test", value: "hello-import" }]),
+  });
+  assert.equal(imported.status, 201);
+  assert.equal(imported.body.inserted, 1);
+  const importedGet = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "GET imported:test" });
+  assert.equal(importedGet.body.rows[0], "hello-import");
 
   const backup = await client.post(`/api/instances/${instance.id}/backups`);
   assert.equal(backup.status, 201);
@@ -163,6 +197,16 @@ test("clickhouse: create, connect, browse, query, backup and restore round-trip"
   const select = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT * FROM events" });
   assert.equal(select.status, 200);
   assert.equal(select.body.rows[0].name, "first");
+
+  const imported = await client.post(`/api/instances/${instance.id}/browse/import`, {
+    format: "json",
+    target: "events",
+    data: JSON.stringify([{ id: 2, name: "second" }]),
+  });
+  assert.equal(imported.status, 201);
+  assert.equal(imported.body.inserted, 1);
+  const afterImport = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT count(*) AS n FROM events" });
+  assert.equal(Number(afterImport.body.rows[0].n), 2);
 
   const backup = await client.post(`/api/instances/${instance.id}/backups`);
   assert.equal(backup.status, 201);

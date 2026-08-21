@@ -550,6 +550,35 @@ button.ghost {
   font-weight: 600;
 }
 
+.import-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.import-target {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  padding: 5px 8px;
+}
+
+.import-button {
+  font-size: 12px;
+  padding: 5px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.import-button.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.import-button input[type="file"] {
+  display: none;
+}
+
 .object-list ul {
   list-style: none;
   padding: 0;

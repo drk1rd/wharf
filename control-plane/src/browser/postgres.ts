@@ -65,6 +65,22 @@ export const postgresAdapter: BrowserAdapter = {
     });
   },
 
+  async importRows(connectionString, target, rows): Promise<{ inserted: number }> {
+    if (rows.length === 0) return { inserted: 0 };
+    const table = quoteIdent(target);
+    const columns = Object.keys(rows[0]);
+    const quotedCols = columns.map(quoteIdent).join(", ");
+    const placeholders = columns.map((_, i) => `$${i + 1}`).join(", ");
+    return withClient(connectionString, async (client) => {
+      let inserted = 0;
+      for (const row of rows) {
+        await client.query(`INSERT INTO ${table} (${quotedCols}) VALUES (${placeholders})`, columns.map((c) => row[c]));
+        inserted++;
+      }
+      return { inserted };
+    });
+  },
+
   async seedSampleData(connectionString): Promise<void> {
     return withClient(connectionString, async (client) => {
       await client.query(`
