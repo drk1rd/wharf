@@ -3,6 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { api, type Engine, type Instance } from "../lib/api";
 import { useToast } from "../components/Toast";
 
+// One consistent glyph for every engine card, not a set of five per-engine
+// mini-logos — trying to hand-draw five brand-accurate marks risks looking
+// worse than no icon at all, and a single restrained "database" glyph
+// (the standard stacked-cylinder shape) reads as considered without
+// reaching for personality the cards don't need.
+function DbIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6" />
+      <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+    </svg>
+  );
+}
+
 export default function Dashboard() {
   const [instances, setInstances] = useState<Instance[] | null>(null);
   const [engines, setEngines] = useState<Engine[]>([]);
@@ -72,6 +87,9 @@ export default function Dashboard() {
                   onClick={() => handleCreate(engine)}
                   disabled={creating !== null}
                 >
+                  <span className="engine-icon">
+                    <DbIcon />
+                  </span>
                   <span className="engine-name">{engine.displayName}</span>
                   <span className="engine-version">
                     {/^\d/.test(engine.defaultVersion) ? `v${engine.defaultVersion}` : engine.defaultVersion}
