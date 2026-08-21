@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { backupsRepo, type BackupRow, type InstanceRow } from "./db.js";
+import { backupsRepo, backupSchedulesRepo, type BackupRow, type BackupScheduleRow, type InstanceRow } from "./db.js";
 import { getManifest } from "./manifests/registry.js";
 import type { InstanceSecrets } from "./manifests/types.js";
 import { execCapture, execWithStdin } from "./docker.js";
@@ -82,6 +82,77 @@ export async function deleteBackupsForInstance(instanceId: string): Promise<void
   const backups = backupsRepo.listForInstance(instanceId);
   await Promise.all(backups.map((b) => fs.rm(b.file_path, { force: true })));
   backupsRepo.removeForInstance(instanceId);
+  backupSchedulesRepo.remove(instanceId);
+}
+
+function badRequest(message: string): never {
+  const err = new Error(message);
+  (err as Error & { status?: number }).status = 400;
+  throw err;
+}
+
+/**
+ * Enable/update a recurring backup schedule, or disable it entirely
+ * (intervalHours: null). retentionCount caps how many backups are kept for
+ * this instance — the oldest are pruned (DB row + file) once a new one lands.
+ */
+export function setBackupSchedule(instanceId: string, intervalHours: number | null, retentionCount: number): BackupScheduleRow | null {
+  if (intervalHours === null) {
+    backupSchedulesRepo.remove(instanceId);
+    return null;
+  }
+  if (!Number.isFinite(intervalHours) || intervalHours < 1 || intervalHours > 24 * 30) {
+    badRequest("intervalHours must be between 1 and 720 (30 days), or null to disable");
+  }
+  if (!Number.isFinite(retentionCount) || retentionCount < 1 || retentionCount > 100) {
+    badRequest("retentionCount must be between 1 and 100");
+  }
+  const existing = backupSchedulesRepo.get(instanceId);
+  backupSchedulesRepo.upsert({
+    instance_id: instanceId,
+    interval_hours: intervalHours,
+    retention_count: retentionCount,
+    last_run_at: existing?.last_run_at ?? null,
+  });
+  return backupSchedulesRepo.get(instanceId) ?? null;
+}
+
+export function getBackupSchedule(instanceId: string): BackupScheduleRow | null {
+  return backupSchedulesRepo.get(instanceId) ?? null;
+}
+
+/** Deletes the oldest backups (DB row + file) beyond retentionCount, newest-first kept. */
+export async function pruneBackups(instanceId: string, retentionCount: number): Promise<void> {
+  const backups = backupsRepo.listForInstance(instanceId); // newest first
+  const toRemove = backups.slice(retentionCount);
+  for (const backup of toRemove) {
+    await fs.rm(backup.file_path, { force: true });
+    backupsRepo.remove(backup.id);
+  }
+}
+
+/**
+ * Runs every due scheduled backup once. Best-effort per instance — one
+ * instance's engine being unreachable or mid-restart doesn't stop the rest
+ * from getting backed up on this tick; it just tries again next tick.
+ */
+export async function runDueBackups(getInstance: (id: string) => InstanceRow | undefined): Promise<void> {
+  for (const schedule of backupSchedulesRepo.list()) {
+    const dueAt = schedule.last_run_at ? new Date(schedule.last_run_at).getTime() + schedule.interval_hours * 3_600_000 : 0;
+    if (Date.now() < dueAt) continue;
+
+    const row = getInstance(schedule.instance_id);
+    if (!row || row.status !== "running") continue;
+
+    try {
+      await createBackup(row);
+      backupSchedulesRepo.updateLastRun(schedule.instance_id, new Date().toISOString());
+      await pruneBackups(schedule.instance_id, schedule.retention_count);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[wharf] scheduled backup failed for instance ${schedule.instance_id}:`, err instanceof Error ? err.message : err);
+    }
+  }
 }
 
 export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {

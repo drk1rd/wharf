@@ -600,6 +600,10 @@ function AdvancedView({ instance }: { instance: Instance }) {
   const [cpuInput, setCpuInput] = useState(instance.resources.cpu);
   const [memInput, setMemInput] = useState(String(instance.resources.memoryMb));
   const [resizing, setResizing] = useState(false);
+  const [schedule, setSchedule] = useState(instance.backupSchedule);
+  const [intervalInput, setIntervalInput] = useState(String(instance.backupSchedule?.intervalHours ?? 24));
+  const [retentionInput, setRetentionInput] = useState(String(instance.backupSchedule?.retentionCount ?? 7));
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const refreshBackups = useCallback(() => {
     api.listBackups(instance.id).then(setBackups).catch(() => undefined);
@@ -650,6 +654,32 @@ function AdvancedView({ instance }: { instance: Instance }) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSaveSchedule() {
+    setSavingSchedule(true);
+    try {
+      const result = await api.setBackupSchedule(instance.id, Number(intervalInput), Number(retentionInput));
+      setSchedule(result);
+      toast.push("Backup schedule saved.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleDisableSchedule() {
+    setSavingSchedule(true);
+    try {
+      await api.setBackupSchedule(instance.id, null);
+      setSchedule(null);
+      toast.push("Backup schedule disabled.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setSavingSchedule(false);
     }
   }
 
@@ -734,6 +764,42 @@ function AdvancedView({ instance }: { instance: Instance }) {
             </button>
           )}
         </div>
+        {instance.backupSupported && (
+          <div className="schedule-row">
+            <label>
+              Every
+              <select value={intervalInput} onChange={(e) => setIntervalInput(e.target.value)} disabled={savingSchedule}>
+                <option value="6">6 hours</option>
+                <option value="24">24 hours</option>
+                <option value="168">7 days</option>
+              </select>
+            </label>
+            <label>
+              Keep last
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={retentionInput}
+                onChange={(e) => setRetentionInput(e.target.value)}
+                disabled={savingSchedule}
+              />
+            </label>
+            <button onClick={handleSaveSchedule} disabled={savingSchedule}>
+              {schedule ? "Update schedule" : "Enable schedule"}
+            </button>
+            {schedule && (
+              <button className="ghost" onClick={handleDisableSchedule} disabled={savingSchedule}>
+                Disable
+              </button>
+            )}
+            {schedule && (
+              <span className="schedule-status">
+                {schedule.lastRunAt ? `Last ran ${new Date(schedule.lastRunAt).toLocaleString()}` : "Not run yet"}
+              </span>
+            )}
+          </div>
+        )}
         {!instance.backupSupported ? (
           <p className="empty">Backup/restore isn't supported for {instance.engine} yet.</p>
         ) : backups.length === 0 ? (

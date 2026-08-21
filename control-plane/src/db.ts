@@ -53,6 +53,14 @@ CREATE TABLE IF NOT EXISTS backups (
   created_at TEXT NOT NULL,
   FOREIGN KEY (instance_id) REFERENCES instances(id)
 );
+
+CREATE TABLE IF NOT EXISTS backup_schedules (
+  instance_id TEXT PRIMARY KEY,
+  interval_hours INTEGER NOT NULL,
+  retention_count INTEGER NOT NULL,
+  last_run_at TEXT,
+  FOREIGN KEY (instance_id) REFERENCES instances(id)
+);
 `);
 
 // owner_id was added after instances first shipped — add it for anyone
@@ -103,6 +111,13 @@ export interface BackupRow {
   file_path: string;
   size_bytes: number;
   created_at: string;
+}
+
+export interface BackupScheduleRow {
+  instance_id: string;
+  interval_hours: number;
+  retention_count: number;
+  last_run_at: string | null;
 }
 
 export const usersRepo = {
@@ -192,5 +207,32 @@ export const backupsRepo = {
   },
   removeForInstance(instanceId: string) {
     db.prepare(`DELETE FROM backups WHERE instance_id = ?`).run(instanceId);
+  },
+  remove(id: string) {
+    db.prepare(`DELETE FROM backups WHERE id = ?`).run(id);
+  },
+};
+
+export const backupSchedulesRepo = {
+  upsert(row: BackupScheduleRow) {
+    db.prepare(
+      `INSERT INTO backup_schedules (instance_id, interval_hours, retention_count, last_run_at)
+       VALUES (@instance_id, @interval_hours, @retention_count, @last_run_at)
+       ON CONFLICT(instance_id) DO UPDATE SET
+         interval_hours = excluded.interval_hours,
+         retention_count = excluded.retention_count`
+    ).run(row);
+  },
+  get(instanceId: string): BackupScheduleRow | undefined {
+    return db.prepare(`SELECT * FROM backup_schedules WHERE instance_id = ?`).get(instanceId) as BackupScheduleRow | undefined;
+  },
+  list(): BackupScheduleRow[] {
+    return db.prepare(`SELECT * FROM backup_schedules`).all() as BackupScheduleRow[];
+  },
+  updateLastRun(instanceId: string, lastRunAt: string) {
+    db.prepare(`UPDATE backup_schedules SET last_run_at = ? WHERE instance_id = ?`).run(lastRunAt, instanceId);
+  },
+  remove(instanceId: string) {
+    db.prepare(`DELETE FROM backup_schedules WHERE instance_id = ?`).run(instanceId);
   },
 };

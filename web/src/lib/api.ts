@@ -41,6 +41,7 @@ export interface Instance {
   resources: { cpu: string; memoryMb: number; diskGb: number };
   connection: { host: string; port: number; connectionString: string } | null;
   backupSupported: boolean;
+  backupSchedule: { intervalHours: number; retentionCount: number; lastRunAt: string | null } | null;
 }
 
 export interface ContainerStats {
@@ -132,5 +133,10 @@ export const api = {
     request<{ inserted: number }>(`/instances/${id}/browse/import`, {
       method: "POST",
       body: JSON.stringify({ format, target, data }),
+    }),
+  setBackupSchedule: (id: string, intervalHours: number | null, retentionCount?: number) =>
+    request<Instance["backupSchedule"]>(`/instances/${id}/backup-schedule`, {
+      method: "PATCH",
+      body: JSON.stringify({ intervalHours, retentionCount }),
     }),
 };

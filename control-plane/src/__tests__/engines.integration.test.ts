@@ -1,6 +1,8 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestServer, Client, dockerAvailable } from "../testing/harness.js";
+import { runDueBackups } from "../backups.js";
+import { instancesRepo } from "../db.js";
 
 // These are the only tests in the suite that touch a real Docker daemon and
 // pull real images. They're written to run for real in CI (GitHub-hosted
@@ -79,6 +81,22 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   const backup = await client.post(`/api/instances/${instance.id}/backups`);
   assert.equal(backup.status, 201);
   assert.ok(backup.body.size_bytes > 0);
+
+  // Scheduled backups, against a real container: enabling a schedule makes
+  // it immediately "due" (no prior run), so calling runDueBackups directly
+  // (bypassing the real interval timer, which only starts from index.ts —
+  // see its comment) must produce one new backup right away, and a second
+  // call right after must not produce another, since it isn't due yet.
+  const scheduled = await client.patch(`/api/instances/${instance.id}/backup-schedule`, { intervalHours: 1, retentionCount: 5 });
+  assert.equal(scheduled.status, 200);
+  assert.equal(scheduled.body.lastRunAt, null);
+  const beforeCount = (await client.get(`/api/instances/${instance.id}/backups`)).body.length;
+  await runDueBackups((id) => instancesRepo.get(id));
+  const afterFirstRun = await client.get(`/api/instances/${instance.id}/backups`);
+  assert.equal(afterFirstRun.body.length, beforeCount + 1, "the due schedule should have created exactly one new backup");
+  await runDueBackups((id) => instancesRepo.get(id));
+  const afterSecondRun = await client.get(`/api/instances/${instance.id}/backups`);
+  assert.equal(afterSecondRun.body.length, afterFirstRun.body.length, "not due yet — a second run right away shouldn't create another");
 
   const del = await client.delete(`/api/instances/${instance.id}`);
   assert.equal(del.status, 204, `delete should return 204 (got ${del.status}: ${JSON.stringify(del.body)})`);

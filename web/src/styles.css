@@ -710,6 +710,45 @@ button.ghost {
   width: 110px;
 }
 
+.schedule-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.schedule-row select,
+.schedule-row input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  width: 100px;
+}
+
+.schedule-status {
+  font-size: 12px;
+  color: var(--muted);
+  align-self: center;
+}
+
 .ask-row input[type="text"] {
   flex: 1;
   background: var(--panel-2);

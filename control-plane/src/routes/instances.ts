@@ -3,7 +3,7 @@ import { instancesRepo } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
 import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
-import { backupSupported, createBackup, listBackups, restoreBackup } from "../backups.js";
+import { backupSupported, createBackup, getBackupSchedule, listBackups, restoreBackup, setBackupSchedule } from "../backups.js";
 import { ownerIdFor } from "../auth.js";
 
 export const instancesRouter = Router();
@@ -32,7 +32,13 @@ function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
     resources: { cpu: row.cpu, memoryMb: row.memory_mb, diskGb: row.disk_gb },
     connection: conn,
     backupSupported: backupSupported(row.engine),
+    backupSchedule: toPublicSchedule(getBackupSchedule(row.id)),
   };
+}
+
+function toPublicSchedule(schedule: ReturnType<typeof getBackupSchedule>) {
+  if (!schedule) return null;
+  return { intervalHours: schedule.interval_hours, retentionCount: schedule.retention_count, lastRunAt: schedule.last_run_at };
 }
 
 instancesRouter.get("/engines", (_req, res) => {
@@ -143,6 +149,25 @@ instancesRouter.get("/instances/:id/backups", (req, res) => {
   try {
     requireOwnedInstance(req.params.id, req.auth!);
     res.json(listBackups(req.params.id));
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+instancesRouter.patch("/instances/:id/backup-schedule", async (req, res) => {
+  try {
+    requireOwnedInstance(req.params.id, req.auth!);
+    const { intervalHours, retentionCount } = req.body ?? {};
+    if (intervalHours !== null && typeof intervalHours !== "number") {
+      res.status(400).json({ error: "intervalHours must be a number, or null to disable" });
+      return;
+    }
+    if (intervalHours !== null && typeof retentionCount !== "number") {
+      res.status(400).json({ error: "retentionCount is required when enabling a schedule" });
+      return;
+    }
+    const schedule = setBackupSchedule(req.params.id, intervalHours, retentionCount ?? 0);
+    res.json(toPublicSchedule(schedule));
   } catch (err) {
     respondError(res, err);
   }
