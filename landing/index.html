@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wharf — Where your data docks.</title>
+<meta name="description" content="One control plane for PostgreSQL, MongoDB, MySQL, Redis, and ClickHouse — a connection URL and a data browser worth using twice, in under 30 seconds. Open source, self-hosted or managed." />
+<meta property="og:title" content="Wharf — Where your data docks." />
+<meta property="og:description" content="Spin up Postgres, MongoDB, MySQL, Redis, or ClickHouse; get a connection URL and a real data browser. Open source, Apache-2.0." />
+<meta property="og:type" content="website" />
+<meta name="theme-color" content="#0A0F1A" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect width='24' height='24' rx='4' fill='%230A0F1A'/%3E%3Cpath d='M3 18h18' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M6 18V9M12 18V5M18 18V11' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0' stroke='%233FBFA6' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #0a0f1a;
+    --ink-2: #121826;
+    --ink-3: #060a12;
+    --paper: #f2ede1;
+    --paper-dim: #cfc9ba;
+    --amber: #e8a33d;
+    --amber-bright: #f4bc63;
+    --teal: #3fbfa6;
+    --slate: #8b93a7;
+    --hairline: #26304a;
+    --max: 1180px;
+    --font-display: "Fraunces", Georgia, "Iowan Old Style", serif;
+    --font-body: "Public Sans", -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--font-body);
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { max-width: 100%; display: block; }
+
+  a { color: inherit; }
+
+  .wrap {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    text-wrap: balance;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber-bright);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 20px;
+    height: 1px;
+    background: var(--amber);
+    display: inline-block;
+  }
+
+  .ref {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--teal);
+    letter-spacing: 0.02em;
+  }
+
+  code, .mono { font-family: var(--font-mono); }
+
+  /* ---------- nav ---------- */
+
+  header.site {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(10, 15, 26, 0.86);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  nav.wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 68px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .brand svg { width: 24px; height: 24px; }
+  .brand-word {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--paper);
+  }
+  .brand-tag {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--slate);
+    margin-left: 4px;
+    display: none;
+  }
+  @media (min-width: 640px) { .brand-tag { display: inline; } }
+
+  nav .links {
+    display: none;
+    gap: 30px;
+    align-items: center;
+    font-size: 14.5px;
+    color: var(--slate);
+  }
+  nav .links a { text-decoration: none; transition: color 0.15s ease; }
+  nav .links a:hover { color: var(--paper); }
+  @media (min-width: 860px) { nav .links { display: flex; } }
+
+  .btn {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 3px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-amber { background: var(--amber); color: var(--ink-3); border-color: var(--amber); }
+  .btn-amber:hover { background: var(--amber-bright); }
+  .btn-ghost { border-color: var(--hairline); color: var(--paper); }
+  .btn-ghost:hover { border-color: var(--slate); }
+
+  /* ---------- hero ---------- */
+
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 92px 0 88px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .hero-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--hairline) 1px, transparent 1px),
+      linear-gradient(90deg, var(--hairline) 1px, transparent 1px);
+    background-size: 64px 64px;
+    opacity: 0.35;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+  }
+  .beacon {
+    position: absolute;
+    top: -220px;
+    right: -160px;
+    width: 620px;
+    height: 620px;
+    pointer-events: none;
+  }
+  .beacon span {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(232, 163, 61, 0.28);
+    animation: pulse 5.5s ease-out infinite;
+  }
+  .beacon span:nth-child(2) { animation-delay: 1.8s; }
+  .beacon span:nth-child(3) { animation-delay: 3.6s; }
+  @keyframes pulse {
+    0% { transform: scale(0.35); opacity: 0; }
+    12% { opacity: 0.9; }
+    100% { transform: scale(1); opacity: 0; }
+  }
+
+  .hero .wrap { position: relative; display: grid; gap: 56px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 980px) { .hero .wrap { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: center; } }
+
+  .hero h1 {
+    font-size: clamp(40px, 6vw, 66px);
+    line-height: 1.04;
+    margin: 22px 0 24px;
+  }
+  .hero h1 em { color: var(--amber-bright); font-style: italic; }
+
+  .hero p.lede {
+    font-size: 18px;
+    color: var(--paper-dim);
+    max-width: 46ch;
+    margin: 0 0 34px;
+  }
+
+  .hero .cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 46px; }
+
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    gap: 28px 40px;
+    border-top: 1px solid var(--hairline);
+    padding-top: 22px;
+    max-width: 560px;
+  }
+  .stat-strip dt {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--slate);
+    margin-bottom: 6px;
+  }
+  .stat-strip dd { margin: 0; font-family: var(--font-mono); font-size: 20px; color: var(--paper); font-variant-numeric: tabular-nums; }
+  .stat-strip dd small { color: var(--teal); font-size: 13px; }
+
+  .terminal {
+    min-width: 0;
+    background: var(--ink-3);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7);
+  }
+  .terminal .bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .terminal .bar span { width: 9px; height: 9px; border-radius: 50%; background: var(--hairline); }
+  .terminal .bar .label { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--slate); }
+  .terminal pre {
+    margin: 0;
+    padding: 22px 20px 24px;
+    font-family: var(--font-mono);
+    font-size: 13.6px;
+    line-height: 1.9;
+    color: var(--paper-dim);
+    overflow-x: auto;
+  }
+  .terminal .prompt { color: var(--teal); }
+  .terminal .cmd { color: var(--paper); }
+  .terminal .out { color: var(--slate); }
+  .terminal .ok { color: var(--teal); }
+  .terminal .url { color: var(--amber-bright); }
+
+  /* ---------- generic section rhythm ---------- */
+
+  section { padding: 96px 0; border-bottom: 1px solid var(--hairline); }
+  .section-head { display: flex; flex-direction: column; gap: 18px; max-width: 640px; margin-bottom: 56px; }
+  .section-head h2 { font-size: clamp(28px, 3.4vw, 38px); }
+  .section-head p { color: var(--paper-dim); font-size: 16.5px; margin: 0; }
+
+  /* ---------- problem / ledger ---------- */
+
+  .problem-cols { display: grid; gap: 28px; grid-template-columns: 1fr; }
+  @media (min-width: 860px) { .problem-cols { grid-template-columns: 1fr 1fr; gap: 0; } }
+  .ledger-col {
+    border: 1px solid var(--hairline);
+    padding: 30px 28px;
+  }
+  @media (min-width: 860px) { .ledger-col:first-child { border-right: none; } }
+  .ledger-col h3 { font-size: 15px; font-family: var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; font-weight: 500; margin-bottom: 18px; }
+  .ledger-col.bad h3 { color: #d9765a; }
+  .ledger-col.good h3 { color: var(--teal); }
+  .ledger-col ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  .ledger-col li { padding-left: 20px; position: relative; color: var(--paper-dim); font-size: 15px; }
+  .ledger-col.bad li::before { content: "\2013"; position: absolute; left: 0; color: #d9765a; }
+  .ledger-col.good li::before { content: "\2013"; position: absolute; left: 0; color: var(--teal); }
+
+  /* ---------- engines ---------- */
+
+  .engines { display: grid; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 700px) { .engines { grid-template-columns: repeat(5, 1fr); } }
+  .engine {
+    background: var(--ink);
+    padding: 26px 20px;
+    transition: background 0.2s ease;
+  }
+  .engine:hover { background: var(--ink-2); }
+  .engine .name { font-family: var(--font-display); font-size: 19px; font-weight: 600; }
+  .engine .ver { font-family: var(--font-mono); font-size: 12px; color: var(--teal); margin: 6px 0 12px; }
+  .engine .note { font-size: 13.5px; color: var(--slate); line-height: 1.5; }
+
+  /* ---------- manifest ledger (features) ---------- */
+
+  .manifest { border-top: 1px solid var(--hairline); }
+  .manifest-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px 32px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  @media (min-width: 760px) { .manifest-row { grid-template-columns: 180px 1fr 1.3fr; align-items: baseline; } }
+  .manifest-row .ref { white-space: nowrap; }
+  .manifest-row h3 { font-size: 20px; font-weight: 600; }
+  .manifest-row p { margin: 0; color: var(--paper-dim); font-size: 15px; }
+  .manifest-more {
+    padding: 22px 0 0;
+    color: var(--slate);
+    font-size: 14px;
+  }
+  .manifest-more .ref { margin-right: 8px; }
+
+  /* ---------- duality (screenshots) ---------- */
+
+  .duality { display: grid; gap: 30px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .duality { grid-template-columns: 1fr 1fr; } }
+  .shot {
+    border: 1px solid var(--hairline);
+    background: var(--ink-2);
+  }
+  .shot figcaption {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 16px 18px;
+    border-top: 1px solid var(--hairline);
+  }
+  .shot figcaption .who { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
+  .shot figcaption .what { font-family: var(--font-mono); font-size: 11.5px; color: var(--slate); text-transform: uppercase; letter-spacing: 0.06em; }
+  .shot img { border-bottom: none; }
+
+  /* ---------- trust ---------- */
+
+  .trust-grid { display: grid; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .trust-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1080px) { .trust-grid { grid-template-columns: repeat(4, 1fr); } }
+  .trust-cell { background: var(--ink); padding: 26px 24px; }
+  .trust-cell .k { font-family: var(--font-mono); font-size: 30px; color: var(--amber-bright); font-variant-numeric: tabular-nums; }
+  .trust-cell .k small { font-size: 14px; color: var(--slate); display: block; margin-top: 6px; font-family: var(--font-body); }
+
+  /* ---------- quickstart cta ---------- */
+
+  .cta-final { text-align: left; }
+  .cta-final .wrap { display: grid; gap: 48px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 900px) { .cta-final .wrap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; } }
+  .cta-final h2 { font-size: clamp(30px, 4vw, 44px); margin-bottom: 18px; }
+  .cta-final p { color: var(--paper-dim); max-width: 46ch; margin: 0 0 30px; }
+
+  .copyline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+    background: var(--ink-3);
+    border: 1px solid var(--hairline);
+    border-radius: 5px;
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+  .copyline code { min-width: 0; color: var(--amber-bright); overflow-x: auto; white-space: nowrap; }
+  .copyline button {
+    background: transparent;
+    border: 1px solid var(--hairline);
+    color: var(--slate);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex: none;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .copyline button:hover { color: var(--paper); border-color: var(--slate); }
+  .copyline button.copied { color: var(--teal); border-color: var(--teal); }
+
+  /* ---------- footer ---------- */
+
+  footer { padding: 52px 0; }
+  footer .wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  @media (min-width: 760px) { footer .wrap { flex-direction: row; justify-content: space-between; align-items: flex-start; } }
+  footer .cols { display: flex; gap: 56px; flex-wrap: wrap; }
+  footer h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--slate); margin: 0 0 14px; font-weight: 500; }
+  footer ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  footer a { text-decoration: none; color: var(--paper-dim); font-size: 14.5px; }
+  footer a:hover { color: var(--paper); }
+  footer .legal { color: var(--slate); font-size: 13px; }
+  footer .brand { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<header class="site">
+  <nav class="wrap">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 18h18" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
+        <path d="M6 18V9M12 18V5M18 18V11" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
+        <path d="M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0" stroke="#3FBFA6" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-word">Wharf</span>
+      <span class="brand-tag">where your data docks</span>
+    </a>
+    <div class="links">
+      <a href="#features">Features</a>
+      <a href="#engines">Engines</a>
+      <a href="#proof">Proof</a>
+      <a href="#quickstart">Self-host</a>
+      <a href="https://github.com/drk1rd/alldb/blob/main/PLAN.md">Plan</a>
+    </div>
+    <a class="btn btn-amber" href="https://github.com/drk1rd/alldb">View source →</a>
+  </nav>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="beacon" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">APACHE-2.0 &middot; SELF-HOSTED OR MANAGED</p>
+        <h1>One dock for<br>every database<br>you <em>run</em>.</h1>
+        <p class="lede">PostgreSQL, MongoDB, MySQL, Redis, and ClickHouse — provisioned from one control plane, handed back as a connection URL, and opened in a data browser worth using twice. No per-engine console to relearn.</p>
+        <div class="cta-row">
+          <a class="btn btn-amber" href="#quickstart">Dock a database →</a>
+          <a class="btn btn-ghost" href="https://github.com/drk1rd/alldb">Read the source</a>
+        </div>
+        <dl class="stat-strip">
+          <div>
+            <dt>Engines</dt>
+            <dd>05 <small>one manifest each</small></dd>
+          </div>
+          <div>
+            <dt>Time to URL</dt>
+            <dd>&lt;30s <small>no YAML</small></dd>
+          </div>
+          <div>
+            <dt>Forked engines</dt>
+            <dd>00 <small>official images</small></dd>
+          </div>
+        </dl>
+      </div>
+      <div class="terminal" role="img" aria-label="Terminal showing a Wharf CLI session that creates a Postgres instance and prints its connection URL">
+        <div class="bar"><span></span><span></span><span></span><div class="label">berth.sh</div></div>
+        <pre><span class="prompt">$</span> <span class="cmd">wharf create postgres</span>
+<span class="out">provisioning production-db (postgres 16)&hellip;</span>
+<span class="ok">✓ running in 14s</span>
+
+<span class="out">DATABASE_URL=</span><span class="url">postgres://wharf:&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;@host:55432/app</span>
+
+<span class="prompt">$</span> <span class="cmd">wharf url production-db --browse</span>
+<span class="out">opening data browser &hellip;</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section id="problem">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">THE PROBLEM</p>
+        <h2>Every engine ships its own console. Nothing ships the whole shelf.</h2>
+        <p>RDS for Postgres, Atlas for Mongo, a different dashboard for Redis — each fine on its own, each a different login, a different way to look at a row. That's a tax on anyone who just needs a database to exist, with somewhere decent to look at it.</p>
+      </div>
+      <div class="problem-cols">
+        <div class="ledger-col bad">
+          <h3>Without a dock</h3>
+          <ul>
+            <li>A separate vendor console per engine, each with its own auth and its own idea of a good UI</li>
+            <li>Credentials stitched together by hand, copied into five different <code>.env</code> files</li>
+            <li>"Look at my data" means a client you install, or a admin panel bolted on as an afterthought</li>
+            <li>Self-hosting means giving up the nice parts of the managed tool entirely</li>
+          </ul>
+        </div>
+        <div class="ledger-col good">
+          <h3>With Wharf</h3>
+          <ul>
+            <li>One control plane, one CLI, one UI — the engine is a dropdown, not a decision about tooling</li>
+            <li>A connection URL and a <code>.env</code> line, generated and ready to paste, every time</li>
+            <li>A data browser that's the actual product, not a bolted-on Adminer link</li>
+            <li>Self-host the exact same OSS core the managed version runs — nothing held back</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="engines">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">SUPPORTED ENGINES</p>
+        <h2>Depth on five engines, not a shallow coat of paint on fifty.</h2>
+        <p>Each engine is one versioned service manifest — image, health check, backup strategy, connection template, data-browser adapter. Adding an engine is a pull request, not a rewrite of the control plane.</p>
+      </div>
+      <div class="engines">
+        <div class="engine">
+          <div class="name">PostgreSQL</div>
+          <div class="ver">v14 &middot; v15 &middot; v16</div>
+          <div class="note">The reference implementation — full SQL browser, ask-your-data, live REST API per table.</div>
+        </div>
+        <div class="engine">
+          <div class="name">MongoDB</div>
+          <div class="ver">v7</div>
+          <div class="note">Structured filter queries only — no <code>$where</code>, no eval, so browsing can't become remote code execution.</div>
+        </div>
+        <div class="engine">
+          <div class="name">MySQL</div>
+          <div class="ver">v8.0</div>
+          <div class="note">Same manifest shape as Postgres, proving the pattern isn't SQL-specific window dressing.</div>
+        </div>
+        <div class="engine">
+          <div class="name">Redis</div>
+          <div class="ver">v7</div>
+          <div class="note">Binary-safe <code>DUMP</code>/<code>RESTORE</code> backups — the one engine with no clean stdin dump path.</div>
+        </div>
+        <div class="engine">
+          <div class="name">ClickHouse</div>
+          <div class="ver">latest</div>
+          <div class="note">HTTP-interface adapter — schema plus <code>FORMAT JSONEachRow</code> data for backup and restore.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">WHAT'S ON THE MANIFEST</p>
+        <h2>Production-grade by default, not an opt-in tier.</h2>
+        <p>Every reference below is a real path or action code in the control plane — not marketing copy. Backups, resize, branching, tokens, and alerting all shipped with a real end-to-end test against a real container before they were called done.</p>
+      </div>
+      <div class="manifest">
+        <div class="manifest-row">
+          <div class="ref">browse/query</div>
+          <h3>A data browser worth opening twice</h3>
+          <p>Table and collection browsing with pagination, a real query runner, and a plain-English "ask your data" box for anyone who'd rather not write SQL by hand.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">resize</div>
+          <h3>Live resize, no restart</h3>
+          <p>Grow or shrink CPU and memory on a running instance — applied to the live container's cgroup limits, capped by an aggregate host-wide budget so no combination of instances can overcommit the box.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">backup-schedule.set</div>
+          <h3>Backups on a schedule, not a reminder</h3>
+          <p>Set an interval and a retention count once; the oldest backups prune themselves automatically. One click restores any of them back onto the instance.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">branch.create</div>
+          <h3>Branch a database like a git repo</h3>
+          <p>Dumps the source and restores it into a fresh instance in one call. Mutate the branch, and the source — a real, independent copy, never a proxy — doesn't see it.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">token.mint</div>
+          <h3>Hand out a key, not your whole login</h3>
+          <p>Scoped API tokens bound to exactly one instance, read-only or read-write — safe to drop into a script or a CI job without handing over the account behind it.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">api.insert</div>
+          <h3>A REST API your tables didn't know they had</h3>
+          <p><code>GET/POST/PATCH/DELETE /instances/:id/api/:table</code>, generated on request against a validated table allowlist — no code to write, no ORM to configure.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">import</div>
+          <h3>CSV and JSON in, one drop</h3>
+          <p>Drop a file on an existing table or collection and it's parsed and inserted — the same importer the CLI and the UI both call.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">audit_log</div>
+          <h3>Know who touched what, and when</h3>
+          <p>Every mutating action — delete, resize, restore, a token minted or revoked — recorded against the instance, outliving the instance itself if it's later removed.</p>
+        </div>
+        <div class="manifest-row">
+          <div class="ref">WHARF_ALERT_WEBHOOK_URL</div>
+          <h3>Alerts before the pager does</h3>
+          <p>Resource thresholds and slow queries pushed to a webhook you control, with a per-instance cooldown so one hot instance doesn't flood the channel.</p>
+        </div>
+      </div>
+      <p class="manifest-more"><span class="ref">+ seed data, framework snippets</span>Every fresh instance starts with sample rows already in it, and the Connect panel hands back ready-to-paste code for the framework you're actually using — not just a bare connection string.</p>
+    </div>
+  </section>
+
+  <section id="duality">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">ONE INSTANCE, TWO VIEWS</p>
+        <h2>Adapts to whoever's looking — not two products.</h2>
+        <p>The default view hides everything except connect and browse. One click away, the same instance shows raw config, live metrics, logs, and a shell. Nothing is duplicated, nothing is a paid unlock.</p>
+      </div>
+      <div class="duality">
+        <figure class="shot">
+          <img src="assets/dashboard.png" alt="Wharf dashboard listing running database instances with their engine, status, and creation time" width="1280" height="760" />
+          <figcaption><span class="who">The dock</span><span class="what">All instances, one screen</span></figcaption>
+        </figure>
+        <figure class="shot">
+          <img src="assets/instance-simple.png" alt="Wharf instance page in Simple view, showing the connection URL, an env snippet, and a browse-data panel" width="1280" height="900" />
+          <figcaption><span class="who">Simple view</span><span class="what">Connect + browse, nothing else</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="proof">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">HOW THIS IS VERIFIED</p>
+        <h2>Tested against real containers, not mocked ones.</h2>
+        <p>Every engine, every feature above, has an end-to-end test that talks to a real running container in CI — the same discipline that has caught real bugs (a readiness race, a foreign-key leak, a branch that silently restored nothing) before they reached anyone self-hosting this.</p>
+      </div>
+      <div class="trust-grid">
+        <div class="trust-cell">
+          <div class="k">5<small>real engines under real CI containers — Postgres, MySQL, MongoDB, Redis, ClickHouse</small></div>
+        </div>
+        <div class="trust-cell">
+          <div class="k">Apache-2.0<small>the self-hosted core is the whole product, not a crippled tier</small></div>
+        </div>
+        <div class="trust-cell">
+          <div class="k">scrypt<small>password hashing, httpOnly session cookies, per-instance ownership by default</small></div>
+        </div>
+        <div class="trust-cell">
+          <div class="k">0<small>forked storage engines — official images only, orchestrated, never rewritten</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart" class="cta-final" style="border-bottom: none;">
+    <div class="wrap">
+      <div>
+        <p class="eyebrow">SELF-HOST IN ONE COMMAND</p>
+        <h2>Zero to a running database in under five minutes.</h2>
+        <p>Requires Docker and Docker Compose. Runs on your own laptop, a spare box, or a VPS — same OSS core either way, nothing held back for a hosted tier.</p>
+        <a class="btn btn-amber" href="https://github.com/drk1rd/alldb#quickstart-self-host">Read the full quickstart →</a>
+      </div>
+      <div>
+        <div class="copyline">
+          <code id="compose-cmd">cd deploy &amp;&amp; docker compose up --build</code>
+          <button type="button" onclick="copyCmd(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="brand" href="#top">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M3 18h18" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
+          <path d="M6 18V9M12 18V5M18 18V11" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
+          <path d="M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0" stroke="#3FBFA6" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-word">Wharf</span>
+      </a>
+      <p class="legal">Apache-2.0 licensed. Open source, self-hosted or managed.</p>
+    </div>
+    <div class="cols">
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/drk1rd/alldb">GitHub</a></li>
+          <li><a href="https://github.com/drk1rd/alldb/blob/main/PLAN.md">Plan &amp; roadmap</a></li>
+          <li><a href="https://github.com/drk1rd/alldb/blob/main/README.md">Documentation</a></li>
+          <li><a href="https://github.com/drk1rd/alldb/blob/main/LICENSE">License</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Engines</h4>
+        <ul>
+          <li><a href="#engines">PostgreSQL</a></li>
+          <li><a href="#engines">MongoDB</a></li>
+          <li><a href="#engines">MySQL &amp; Redis</a></li>
+          <li><a href="#engines">ClickHouse</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  function copyCmd(btn) {
+    var text = document.getElementById('compose-cmd').textContent;
+    var done = function () {
+      var original = 'Copy';
+      btn.textContent = 'Copied';
+      btn.classList.add('copied');
+      setTimeout(function () { btn.textContent = original; btn.classList.remove('copied'); }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () {});
+    } else {
+      var el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(el);
+    }
+  }
+</script>
+
+</body>
+</html>

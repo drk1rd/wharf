@@ -2,8 +2,11 @@
 
 **Where your data docks.** Spin up a database, get a URL, look at your data — in one place, done exceptionally well.
 
+[![CI](https://github.com/drk1rd/alldb/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drk1rd/alldb/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 ![Postgres · MongoDB · MySQL · Redis · ClickHouse](https://img.shields.io/badge/engines-Postgres%20%C2%B7%20MongoDB%20%C2%B7%20MySQL%20%C2%B7%20Redis%20%C2%B7%20ClickHouse-informational)
+
+[Landing page source](./landing) (not yet deployed to a live URL — see `landing/README.md` to preview or deploy it) &middot; [Contributing](./CONTRIBUTING.md) &middot; [Security policy](./SECURITY.md)
 
 ![Wharf dashboard](./docs/screenshots/dashboard.png)
 
@@ -72,8 +75,12 @@ control-plane/   API server, SQLite metadata store, Docker provisioner, data-bro
 web/             React/Vite UI — accounts, Settings, create flow, Simple/Advanced instance views
 cli/             `wharf` command-line client (admin/service token)
 deploy/          docker-compose.yml self-host quickstart
+landing/         self-contained static marketing page — see landing/README.md to preview or deploy
 PLAN.md          product plan, competitive reasoning, roadmap, honest scoring
+.env.example     every control-plane environment variable, documented, all optional
 ```
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the dev workflow, how to add a new engine, and pre-PR checks; [`SECURITY.md`](./SECURITY.md) for reporting vulnerabilities privately; [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) for community expectations.
 
 ## Status
 
@@ -82,3 +89,5 @@ Postgres, MongoDB, MySQL, Redis, and ClickHouse, single Docker driver — workin
 A further nine-feature round shipped on top of that (see `PLAN.md` §20 for the full write-up, including two real bugs CI found): sample data seeded into every fresh instance, framework connection snippets in the Connect panel, CSV/JSON import, scheduled/automated backups, scoped per-instance API tokens (read or read-write, bound to one instance), an audit log of every mutating action, resource/slow-query webhook alerting, database branching (instant clone via dump-and-restore into a fresh instance), and an auto-generated REST API per table (`GET/POST/PATCH/DELETE /instances/:id/api/:table`, Postgres/MySQL/ClickHouse) — plus an aggregate host-wide CPU/memory budget (`WHARF_MAX_TOTAL_CPU`/`WHARF_MAX_TOTAL_MEMORY_MB`) so live resize can't let every instance on a host overcommit it together.
 
 A real test suite and CI run on every push — real Postgres/MySQL/MongoDB/Redis/ClickHouse containers in CI, not mocks (see `PLAN.md` §18–20). Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts, CLI login. See `PLAN.md` §13–14 for what's deliberately deferred and why.
+
+The repo itself is publish-ready: a filled-in `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.env.example`, GitHub issue/PR templates, and a real `landing/` marketing page — see `PLAN.md` §21.

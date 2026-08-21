@@ -418,3 +418,23 @@ Asked directly to think about resource limits, then — after a two-persona ("vi
 ---
 
 **Next step (decided)**: §16's evidence-generating slice and §17's pilot-readiness work still stand as written, unchanged, for whenever a pilot happens. But the redirect in §18 is the live instruction — treat this as an evolving piece of software with a growing regression net, not a repo waiting on a pilot. CI is confirmed green on real infrastructure (§19, §20). Next candidates: CLI login parity (the account system exists now; the CLI still only knows the admin token) and, only once those are solid, the larger deferred items in §14 (Kubernetes driver, more engines, MCP server) — still gated on real signal they're needed, not built ahead of it.
+
+## 21. Publish-readiness pass, and a real marketing landing page
+
+Asked directly: make the repo ready to publish world-wide, and build a real landing page in its own directory. Two different kinds of work — one closes gaps a serious OSS adopter checks for before trusting a repo, the other is the front door someone hits before they ever clone it.
+
+**Repo publish-readiness:**
+- **`LICENSE`'s copyright line was still the literal `[yyyy] [name of copyright owner]` placeholder** — Apache-2.0's template text, never filled in when the file was added (§17b). Fixed to `Copyright 2026 Wharf contributors`.
+- **`CONTRIBUTING.md`** — dev setup, the pre-PR checklist (typecheck/build/test, real-container integration tests for anything engine-related), and, explicitly, how to add a new database engine (the two files — a manifest and a browser adapter — and where to register them), since that's the contribution shape this project's whole extensibility story (§8) is built around.
+- **`SECURITY.md`** — points to GitHub's private vulnerability reporting rather than public issues, states scope (control plane/web/CLI/deploy config; upstream engine images are out of scope), and is honest about the two real gaps §10 already named (no encryption at rest for the SQLite store, no built-in TLS termination) rather than pretending they don't exist.
+- **`CODE_OF_CONDUCT.md`** — Contributor Covenant 2.1, the OSS standard.
+- **`.env.example`** — every control-plane environment variable that exists in the codebase (checked by grepping `process.env.WHARF_*`/`OPENROUTER_API_KEY` directly, not written from memory), documented, all defaulted off/unset.
+- **GitHub issue templates** (bug report, feature request, a security-advisory contact link) **and a PR template** with the same checklist `CONTRIBUTING.md` describes.
+- **`package.json` metadata** — `license`, `repository`, `homepage`, `bugs`, `keywords` were all missing at the root; added so the repo's own package manifest agrees with what `LICENSE` and the GitHub UI already say.
+- **README** — a CI status badge (there was a license/engines badge but nothing showing whether the build is actually green, which is exactly the kind of signal §18/§19/§20's entire testing investment was for), and links to the new docs.
+
+**The landing page** (`landing/`): a single self-contained `index.html` (plus a small `assets/` with the two real product screenshots and a `README.md` covering local preview and deployment to any static host) — no build step, no framework, deliberately independent of `web/`'s Vite app so it can be pointed at by GitHub Pages/Vercel/Netlify without dragging the product's own toolchain along.
+
+Design-wise, it leans into what "Wharf" already means rather than a generic SaaS template: a dark ink-navy base matching the product's own UI, an amber "beacon" accent and teal "channel marker" secondary, Fraunces/Public Sans/IBM Plex Mono for a display-serif-plus-manifest-mono pairing, and — the one real structural idea — a "manifest ledger" feature list where each row's reference column is a literal string from the codebase (`resize`, `branch.create`, `token.mint`, `api.insert`, `audit_log`, `WHARF_ALERT_WEBHOOK_URL`, ...), not decorative numbering. Verified rendered correctly (desktop, tablet, and mobile viewports), no horizontal overflow at any width, and the copy-to-clipboard button actually works, using Playwright against the pre-installed Chromium — the same "don't just claim it, check it" standard as everything else in this document.
+
+**Verified before pushing**: `npm run typecheck`, `npm run build`, and `npm test` pass locally for both workspaces (unaffected by this batch — it's docs, config, and a new static directory, no application code touched). No CI check needed beyond confirming the push itself succeeds, for the same reason §20's docs-only commit didn't need one.
