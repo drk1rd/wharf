@@ -32,4 +32,12 @@ export interface BrowserAdapter {
    */
   dumpAll?(connectionString: string): Promise<Buffer>;
   restoreAll?(connectionString: string, data: Buffer): Promise<void>;
+  /**
+   * Inserts a small set of sample rows/documents/keys right after a fresh
+   * instance becomes ready, so the data browser isn't empty on first look.
+   * System-initiated only, with fixed statements — never fed user input, so
+   * it doesn't need the safety constraints runQuery has (e.g. MongoDB's
+   * find-only restriction).
+   */
+  seedSampleData?(connectionString: string): Promise<void>;
 }

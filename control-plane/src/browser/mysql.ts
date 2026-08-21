@@ -55,6 +55,42 @@ export const mysqlAdapter: BrowserAdapter = {
     });
   },
 
+  async seedSampleData(connectionString): Promise<void> {
+    return withConnection(connectionString, async (conn) => {
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS customers (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS orders (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          customer_id INT NOT NULL,
+          item VARCHAR(255) NOT NULL,
+          amount_cents INT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (customer_id) REFERENCES customers(id)
+        )
+      `);
+      // Only ever runs once, right after provisioning — nothing else writes here first.
+      await conn.query(
+        `INSERT INTO customers (name, email) VALUES (?, ?), (?, ?), (?, ?)`,
+        ["Ada Lovelace", "ada@example.com", "Grace Hopper", "grace@example.com", "Alan Turing", "alan@example.com"]
+      );
+      await conn.query(`
+        INSERT INTO orders (customer_id, item, amount_cents)
+        SELECT id, 'Widget', 1999 FROM customers WHERE email = 'ada@example.com'
+        UNION ALL
+        SELECT id, 'Gadget', 4999 FROM customers WHERE email = 'grace@example.com'
+        UNION ALL
+        SELECT id, 'Gizmo', 2999 FROM customers WHERE email = 'alan@example.com'
+      `);
+    });
+  },
+
   async getSchemaContext(connectionString): Promise<string> {
     return withConnection(connectionString, async (conn) => {
       const [rows] = await conn.query<mysql.RowDataPacket[]>(

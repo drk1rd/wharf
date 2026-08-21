@@ -36,9 +36,18 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   const instance = await createAndWait("postgres");
   assert.ok(instance.connection?.connectionString.startsWith("postgres://"));
 
+  // Sample data (seedSampleData) is inserted before the instance is marked
+  // running, so a fresh instance already has something to look at.
   const objects = await client.get(`/api/instances/${instance.id}/browse/objects`);
   assert.equal(objects.status, 200);
-  assert.deepEqual(objects.body, []);
+  assert.deepEqual(
+    objects.body.map((o: any) => o.name).sort(),
+    ["customers", "orders"]
+  );
+
+  const seeded = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
+  assert.equal(seeded.status, 200);
+  assert.equal(Number(seeded.body.rows[0].n), 3);
 
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 1 AS one" });
   assert.equal(query.status, 200);
@@ -83,7 +92,16 @@ test("mongodb: create, connect, browse, query, backup", { skip, timeout: 150_000
 
   const objects = await client.get(`/api/instances/${instance.id}/browse/objects`);
   assert.equal(objects.status, 200);
-  assert.deepEqual(objects.body, []);
+  assert.deepEqual(
+    objects.body.map((o: any) => o.name).sort(),
+    ["customers", "orders"]
+  );
+
+  const seeded = await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: JSON.stringify({ collection: "customers", filter: {} }),
+  });
+  assert.equal(seeded.status, 200);
+  assert.equal(seeded.body.rows.length, 3);
 
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, {
     query: JSON.stringify({ collection: "nonexistent", filter: {} }),

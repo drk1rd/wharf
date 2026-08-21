@@ -65,6 +65,42 @@ export const postgresAdapter: BrowserAdapter = {
     });
   },
 
+  async seedSampleData(connectionString): Promise<void> {
+    return withClient(connectionString, async (client) => {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS customers (
+          id SERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        CREATE TABLE IF NOT EXISTS orders (
+          id SERIAL PRIMARY KEY,
+          customer_id INTEGER NOT NULL REFERENCES customers(id),
+          item TEXT NOT NULL,
+          amount_cents INTEGER NOT NULL,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+      `);
+      // Only ever runs once, right after provisioning, so there's no need to
+      // guard these inserts against being re-run — nothing else writes here first.
+      await client.query(`
+        INSERT INTO customers (name, email) VALUES
+          ('Ada Lovelace', 'ada@example.com'),
+          ('Grace Hopper', 'grace@example.com'),
+          ('Alan Turing', 'alan@example.com');
+      `);
+      await client.query(`
+        INSERT INTO orders (customer_id, item, amount_cents)
+        SELECT id, 'Widget', 1999 FROM customers WHERE email = 'ada@example.com'
+        UNION ALL
+        SELECT id, 'Gadget', 4999 FROM customers WHERE email = 'grace@example.com'
+        UNION ALL
+        SELECT id, 'Gizmo', 2999 FROM customers WHERE email = 'alan@example.com';
+      `);
+    });
+  },
+
   async getSchemaContext(connectionString): Promise<string> {
     return withClient(connectionString, async (client) => {
       const res = await client.query<{ table_schema: string; table_name: string; column_name: string; data_type: string }>(

@@ -62,6 +62,23 @@ export const mongodbAdapter: BrowserAdapter = {
     });
   },
 
+  async seedSampleData(connectionString): Promise<void> {
+    return withClient(connectionString, async (client) => {
+      const db = client.db();
+      const customers = await db.collection("customers").insertMany([
+        { name: "Ada Lovelace", email: "ada@example.com" },
+        { name: "Grace Hopper", email: "grace@example.com" },
+        { name: "Alan Turing", email: "alan@example.com" },
+      ]);
+      const ids = Object.values(customers.insertedIds);
+      await db.collection("orders").insertMany([
+        { customerId: ids[0], item: "Widget", amountCents: 1999 },
+        { customerId: ids[1], item: "Gadget", amountCents: 4999 },
+        { customerId: ids[2], item: "Gizmo", amountCents: 2999 },
+      ]);
+    });
+  },
+
   /** MongoDB is schemaless, so this samples a few documents per collection to infer field shapes. */
   async getSchemaContext(connectionString): Promise<string> {
     return withClient(connectionString, async (client) => {

@@ -53,6 +53,12 @@ export function internalConnectionString(row: InstanceRow): string | null {
 // disables the cap — fine for a single-user local/dev setup.
 const MAX_INSTANCES = Number(process.env.WHARF_MAX_INSTANCES ?? 0);
 
+// A handful of sample rows/documents/keys inserted right after a fresh
+// instance becomes ready, so the data browser isn't empty on first look —
+// set to "false" to disable (e.g. a shared/hosted deployment that would
+// rather every instance start genuinely empty).
+const SEED_SAMPLE_DATA = process.env.WHARF_SEED_SAMPLE_DATA !== "false";
+
 // Instance count alone doesn't protect a shared host: live resize (below)
 // lets any single instance grow up to 16 cores / 32GB with no ceiling of its
 // own, so a handful of resizes can still starve the box even under a low
@@ -179,6 +185,15 @@ async function provision(id: string, manifest: ServiceManifest, version: string,
 
     const connectionString = manifest.connectionString(secrets, PROBE_HOST, hostPort);
     await waitForAdapterReady(manifest.browserAdapter, connectionString);
+
+    if (SEED_SAMPLE_DATA) {
+      // Best-effort: a fresh instance still counts as successfully provisioned
+      // even if seeding fails for some reason — sample data is a convenience,
+      // not something worth failing the whole instance over.
+      await getBrowserAdapter(manifest.browserAdapter)
+        .seedSampleData?.(connectionString)
+        .catch(() => undefined);
+    }
 
     instancesRepo.update(id, { status: "running" });
   } catch (err) {

@@ -121,6 +121,15 @@ export const redisAdapter: BrowserAdapter = {
     });
   },
 
+  async seedSampleData(connectionString): Promise<void> {
+    return withClient(connectionString, async (client) => {
+      await client.set("session:demo", "example-session-token");
+      await client.hSet("user:1", { name: "Ada Lovelace", email: "ada@example.com" });
+      await client.rPush("recent:signups", ["ada@example.com", "grace@example.com", "alan@example.com"]);
+      await client.sAdd("tags:featured", ["widget", "gadget", "gizmo"]);
+    });
+  },
+
   async restoreAll(connectionString, data): Promise<void> {
     const parsed = JSON.parse(data.toString("utf8")) as {
       format?: string;

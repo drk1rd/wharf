@@ -123,6 +123,31 @@ export const clickhouseAdapter: BrowserAdapter = {
     return Buffer.from(JSON.stringify({ format: "wharf-clickhouse-dump-v2", tables: bundle }), "utf8");
   },
 
+  async seedSampleData(connectionString): Promise<void> {
+    await query(
+      connectionString,
+      "CREATE TABLE customers (id UInt32, name String, email String, created_at DateTime DEFAULT now()) ENGINE = MergeTree ORDER BY id"
+    );
+    await query(
+      connectionString,
+      "CREATE TABLE orders (id UInt32, customer_id UInt32, item String, amount_cents UInt32, created_at DateTime DEFAULT now()) ENGINE = MergeTree ORDER BY id"
+    );
+    await query(
+      connectionString,
+      `INSERT INTO customers (id, name, email) VALUES
+        (1, 'Ada Lovelace', 'ada@example.com'),
+        (2, 'Grace Hopper', 'grace@example.com'),
+        (3, 'Alan Turing', 'alan@example.com')`
+    );
+    await query(
+      connectionString,
+      `INSERT INTO orders (id, customer_id, item, amount_cents) VALUES
+        (1, 1, 'Widget', 1999),
+        (2, 2, 'Gadget', 4999),
+        (3, 3, 'Gizmo', 2999)`
+    );
+  },
+
   async restoreAll(connectionString, data): Promise<void> {
     const parsed = JSON.parse(data.toString("utf8")) as {
       format?: string;
