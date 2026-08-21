@@ -24,6 +24,7 @@ function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
   const conn = connectionInfo(row);
   return {
     id: row.id,
+    ownerId: row.owner_id,
     name: row.name,
     engine: row.engine,
     version: row.version,
@@ -56,10 +57,13 @@ instancesRouter.get("/engines", (_req, res) => {
 instancesRouter.get("/instances", (req, res) => {
   const auth = req.auth!;
   // A scoped token only ever sees the one instance it's bound to — never
-  // the full list a "list all" call would otherwise return.
+  // the full list a "list all" call would otherwise return. A superadmin
+  // sees every instance, same as the WHARF_TOKEN admin credential.
   const rows: InstanceRow[] =
     auth.kind === "user"
-      ? instancesRepo.listForOwner(auth.userId)
+      ? auth.isSuperadmin
+        ? instancesRepo.list()
+        : instancesRepo.listForOwner(auth.userId)
       : auth.kind === "scoped"
         ? [instancesRepo.get(auth.instanceId)].filter((r): r is InstanceRow => Boolean(r))
         : instancesRepo.list();

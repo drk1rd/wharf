@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // Docker-free: backup-schedule, token mint/revoke, and delete (which
 // tolerates no real daemon — stopAndRemoveContainer swallows its own docker
@@ -9,7 +9,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // same reasoning as scoped-tokens.test.ts.
 const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
-const admin = new Client(server.baseUrl);
+const admin = await setupSuperadmin(server);
 
 function fakeInstance(name: string) {
   const row = {
@@ -51,7 +51,7 @@ test("setting a backup schedule records an audit entry with the actor and detail
   assert.equal(log.status, 200);
   assert.equal(log.body.length, 1);
   assert.equal(log.body[0].action, "backup-schedule.set");
-  assert.equal(log.body[0].actor, "anonymous");
+  assert.match(log.body[0].actor, /^superadmin:/);
   assert.match(log.body[0].detail, /every 24h, keep 5/);
   assert.ok(log.body[0].createdAt);
 });

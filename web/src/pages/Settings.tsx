@@ -1,16 +1,55 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type OpenRouterModel } from "../lib/api";
+import { api, type ManagedUser, type OpenRouterModel } from "../lib/api";
 import { useAuth } from "../components/AuthProvider";
 import { useToast } from "../components/Toast";
+import { useConfirm } from "../components/ConfirmDialog";
 
 export default function Settings() {
-  const { user, setUser, authRequired, logout } = useAuth();
+  const { user, setUser, logout } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const [models, setModels] = useState<OpenRouterModel[] | null>(null);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState(user?.defaultModel ?? "");
   const [saving, setSaving] = useState(false);
+  const [users, setUsers] = useState<ManagedUser[] | null>(null);
+
+  useEffect(() => {
+    if (!user?.isSuperadmin) return;
+    api
+      .listUsers()
+      .then(setUsers)
+      .catch((err) => toast.push(err instanceof Error ? err.message : String(err), "error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.isSuperadmin]);
+
+  async function promote(id: string, isSuperadmin: boolean) {
+    try {
+      await api.setUserSuperadmin(id, isSuperadmin);
+      setUsers(await api.listUsers());
+      toast.push(isSuperadmin ? "Promoted to superadmin." : "Superadmin access removed.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
+
+  async function removeUser(id: string, email: string) {
+    const ok = await confirm({
+      title: "Delete this account?",
+      description: `${email}'s account will be removed. Any databases they own become ownerless (visible to everyone) rather than being deleted.`,
+      confirmLabel: "Delete account",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteUser(id);
+      setUsers(await api.listUsers());
+      toast.push("Account deleted.", "success");
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    }
+  }
 
   useEffect(() => {
     api
@@ -46,16 +85,71 @@ export default function Settings() {
         <p>Your account and how Ask your data picks a model.</p>
       </div>
 
-      {authRequired && user && (
+      {user && (
         <section className="panel">
           <h2>Account</h2>
           <dl className="config-list">
             <dt>Email</dt>
             <dd>{user.email}</dd>
+            {user.isSuperadmin && (
+              <>
+                <dt>Role</dt>
+                <dd>Superadmin — full access to every database and every account</dd>
+              </>
+            )}
           </dl>
           <button className="danger" style={{ marginTop: 16 }} onClick={logout}>
             Sign out
           </button>
+        </section>
+      )}
+
+      {user?.isSuperadmin && (
+        <section className="panel">
+          <h2>Users</h2>
+          <p className="empty" style={{ marginBottom: 12 }}>
+            Every account on this instance. A superadmin can see and manage every database regardless of who
+            created it — this is where you grant or remove that access for other accounts.
+          </p>
+          {users === null ? (
+            <div className="skeleton" style={{ height: 80, borderRadius: "var(--radius-sm)" }} />
+          ) : (
+            <table className="instance-table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Databases</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td>{u.email}</td>
+                    <td>{u.isSuperadmin ? "Superadmin" : "User"}</td>
+                    <td>{u.instanceCount}</td>
+                    <td>{new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      {u.id === user.id ? (
+                        <span className="empty">you</span>
+                      ) : (
+                        <>
+                          <button className="ghost" onClick={() => promote(u.id, !u.isSuperadmin)}>
+                            {u.isSuperadmin ? "Remove superadmin" : "Make superadmin"}
+                          </button>{" "}
+                          <button className="danger" onClick={() => removeUser(u.id, u.email)}>
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </section>
       )}
 

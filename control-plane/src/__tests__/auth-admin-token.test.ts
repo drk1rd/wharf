@@ -2,14 +2,16 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestServer, Client } from "../testing/harness.js";
 
-// WHARF_TOKEN set from process start — this is the CLI's auth path, and it
-// also means the bootstrap/anonymous window from auth-flow.test.ts never
-// opens, even with zero accounts.
+// WHARF_TOKEN set from process start — this is the CLI's auth path. It's
+// independent of account setup: needsSetup still reflects "no account
+// exists yet" (WHARF_TOKEN doesn't create one), but every request below
+// still needs real credentials regardless — there's no bootstrap window
+// where an unauthenticated request succeeds, with or without the token set.
 const server = await startTestServer({ WHARF_TOKEN: "test-admin-secret" });
 
-test("with WHARF_TOKEN configured, auth is required immediately — no anonymous bootstrap window", async () => {
+test("with WHARF_TOKEN configured but no account created yet, config still reports needsSetup", async () => {
   const config = await new Client(server.baseUrl).get("/api/config");
-  assert.equal(config.body.authRequired, true);
+  assert.equal(config.body.needsSetup, true);
 });
 
 test("a request with no credentials at all is rejected", async () => {

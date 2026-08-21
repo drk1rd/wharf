@@ -10,10 +10,14 @@ import { ConfirmProvider } from "./components/ConfirmDialog";
 import { AuthProvider, useAuth } from "./components/AuthProvider";
 
 function Shell() {
-  const { loading, authRequired, user } = useAuth();
+  const { loading, user } = useAuth();
 
   if (loading) return null;
-  if (authRequired && !user) return <AuthPage />;
+  // No anonymous-access mode anymore — a signed-in user is always required,
+  // whether that means signing in, signing up, or (on a fresh instance)
+  // completing the mandatory superadmin setup step. AuthPage itself decides
+  // which of those to show, based on needsSetup.
+  if (!user) return <AuthPage />;
 
   return (
     <div className="app">

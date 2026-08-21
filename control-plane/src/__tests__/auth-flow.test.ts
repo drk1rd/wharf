@@ -2,19 +2,19 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { startTestServer, Client } from "../testing/harness.js";
 
-// No WHARF_TOKEN in this file's env — exercises the bootstrap/anonymous
-// window described in README.md and PLAN.md §17 ("signing up the first
-// account *is* the switch").
+// No WHARF_TOKEN in this file's env — exercises the mandatory first-boot
+// setup flow described in README.md and PLAN.md: no anonymous bootstrap
+// window anymore, the very first account is forced through signup and
+// automatically becomes superadmin.
 const server = await startTestServer();
 const c = new Client(server.baseUrl);
 
-test("bootstrap mode: unauthenticated requests work before any account exists", async () => {
+test("before any account exists, config reports needsSetup and unauthenticated requests are rejected", async () => {
   const config = await c.get("/api/config");
-  assert.equal(config.body.authRequired, false);
+  assert.equal(config.body.needsSetup, true);
 
   const list = await c.get("/api/instances");
-  assert.equal(list.status, 200);
-  assert.deepEqual(list.body, []);
+  assert.equal(list.status, 401, "there is no more anonymous full-access window");
 });
 
 test("signup requires a valid email and an 8+ character password", async () => {
@@ -25,13 +25,23 @@ test("signup requires a valid email and an 8+ character password", async () => {
   assert.equal(shortPassword.status, 400);
 });
 
-test("signup creates an account, signs them in, and flips authRequired on", async () => {
+test("signup creates an account, signs them in, and the first account becomes superadmin", async () => {
   const signup = await c.post("/api/auth/signup", { email: "Alice@Example.com", password: "correct-horse-battery" });
   assert.equal(signup.status, 201);
   assert.equal(signup.body.email, "alice@example.com"); // normalized to lowercase
+  assert.equal(signup.body.isSuperadmin, true, "the very first account on a fresh instance is always superadmin");
 
   const config = await c.get("/api/config");
-  assert.equal(config.body.authRequired, true);
+  assert.equal(config.body.needsSetup, false);
+});
+
+test("a second signup creates a regular, non-superadmin account", async () => {
+  const signup = await new Client(server.baseUrl).post("/api/auth/signup", { email: "bob@example.com", password: "correct-horse-battery" });
+  assert.equal(signup.status, 201);
+  assert.equal(signup.body.isSuperadmin, false);
+
+  const config = await c.get("/api/config");
+  assert.equal(config.body.needsSetup, false, "still false — only the very first account matters");
 });
 
 test("after the first account, an unauthenticated client is rejected", async () => {

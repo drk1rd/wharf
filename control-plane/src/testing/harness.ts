@@ -100,6 +100,28 @@ export class Client {
   }
 }
 
+/**
+ * Signs up the very first account on a fresh test server — which the
+ * server itself always promotes to superadmin (see routes/auth.ts) — and
+ * returns a Client already holding that session. The standard way for a
+ * test file to get a full-access client now that there's no more anonymous
+ * bootstrap window; replaces the old "new Client(server.baseUrl) // anonymous
+ * bootstrap mode" pattern used throughout this suite before that window
+ * was removed.
+ */
+export async function setupSuperadmin(
+  server: TestServer,
+  email = "admin@example.com",
+  password = "adminpass123"
+): Promise<Client> {
+  const client = new Client(server.baseUrl);
+  const res = await client.post("/api/auth/signup", { email, password });
+  if (res.status !== 201) {
+    throw new Error(`setupSuperadmin failed: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+  return client;
+}
+
 /** True if a Docker daemon is actually reachable — gates the real-container integration tests. */
 export async function dockerAvailable(): Promise<boolean> {
   try {

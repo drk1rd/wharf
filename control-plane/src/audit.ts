@@ -6,10 +6,8 @@ function actorLabel(auth: AuthContext): string {
   switch (auth.kind) {
     case "admin":
       return "admin";
-    case "anonymous":
-      return "anonymous";
     case "user":
-      return `user:${auth.userId}`;
+      return auth.isSuperadmin ? `superadmin:${auth.userId}` : `user:${auth.userId}`;
     case "scoped":
       return `token:${auth.tokenId}`;
   }

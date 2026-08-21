@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // Route-level checks only — actually cloning data needs a real container
 // (createBackup's exec-based dump has no docker-less fallback), so the real
@@ -11,7 +11,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // source id 404s inside requireRunningInstance before createBackup runs.
 const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
-const admin = new Client(server.baseUrl);
+const admin = await setupSuperadmin(server);
 
 test("a scoped token cannot create a branch", async () => {
   const row = {

@@ -30,16 +30,16 @@ docker compose up --build
 - Web UI: http://localhost:5173
 - API: http://localhost:8080
 
-Open the UI and click a database engine to create an instance — within ~10–30 seconds you'll have a connection URL and a data browser for it.
+The first thing you'll see is a **"Create your superadmin account"** screen — Wharf requires this before anything else works, on every fresh instance. That account gets full management access to every database and every other account created afterward (see Settings → Users once you're in). There's no anonymous or single-user mode to opt out of; every request needs a real session or the `WHARF_TOKEN` admin credential, from the very first request onward.
 
-**Accounts, and the bootstrap window.** Wharf runs in single-user local/dev mode — no login screen — until either `WHARF_TOKEN` is set or the first account signs up. The moment either happens, every other request needs a real session (or the admin token); that's the same instant it becomes safe to point other people at it. There's no separate step to "turn on" auth — signing up the first account *is* the switch.
+Once that's done, click a database engine to create an instance — within ~10–30 seconds you'll have a connection URL and a data browser for it.
 
 To enable **Ask your data** (ask a database question in plain English instead of writing SQL/Mongo queries by hand), set `OPENROUTER_API_KEY` on the control plane. Off by default — the UI shows a hint instead of the input box until it's configured. Each signed-in user picks their own model from OpenRouter's live catalog in Settings (or inline per question); there's no single hardcoded model.
 
 ## Running a small pilot (letting a few people try it)
 
 1. **Set `WHARF_MAX_INSTANCES`** (e.g. `10`) so one enthusiastic tester can't exhaust the host by creating instances in a loop. On its own this only caps *count* — live resize (below) still lets any single instance grow to 16 cores / 32GB, so also set **`WHARF_MAX_TOTAL_CPU`** (cores) and/or **`WHARF_MAX_TOTAL_MEMORY_MB`** to cap the combined cpu/memory reserved across every instance on the host. Both are enforced on create *and* resize; either is optional and unset means no limit on that dimension.
-2. **Have testers sign up for real accounts** rather than sharing one login — each account only sees its own instances (plus anything created before any account existed). Set `WHARF_TOKEN` too if you also want an admin/CLI bypass that can see everything.
+2. **Have testers sign up for real accounts** rather than sharing one login — each account only sees its own instances (plus anything created before any account existed). You're already the superadmin from completing the initial setup step, so you can see and manage everything by default; set `WHARF_TOKEN` too if you also want an admin/CLI bypass that doesn't need a browser session.
 3. **Expose it** — the fastest path for a handful of people is a tunnel from a machine you already have (`docker compose up` locally, then `cloudflared tunnel --url http://localhost:5173` or `ngrok http 5173` for a public HTTPS URL), rather than standing up new cloud infra for a short pilot. Set `WHARF_COOKIE_SECURE=true` once it's served over HTTPS so session cookies get the `Secure` flag.
 
 See `PLAN.md` §17 for the full reasoning and what's still deliberately *not* built (billing, org/team accounts, an onboarding flow).
@@ -91,3 +91,5 @@ A further nine-feature round shipped on top of that (see `PLAN.md` §20 for the 
 A real test suite and CI run on every push — real Postgres/MySQL/MongoDB/Redis/ClickHouse containers in CI, not mocks (see `PLAN.md` §18–20). Confirmed with a real `docker compose up --build` on real hardware, not just in the build sandbox. Not yet built: Kubernetes driver, MCP/AI-agent server, billing, org/team accounts, CLI login. See `PLAN.md` §13–14 for what's deliberately deferred and why.
 
 The repo itself is publish-ready: a filled-in `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.env.example`, GitHub issue/PR templates, and a real `landing/` marketing page — see `PLAN.md` §21.
+
+There's no more anonymous-access bootstrap window: every fresh instance requires a mandatory first-boot **superadmin setup** step before anything else works, and that account gets full platform-wide management — every database regardless of owner, plus a Users panel (Settings) to promote, demote, or delete other accounts. See `PLAN.md` §22.

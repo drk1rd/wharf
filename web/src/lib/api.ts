@@ -32,6 +32,7 @@ export interface Engine {
 
 export interface Instance {
   id: string;
+  ownerId: string | null;
   name: string;
   engine: string;
   version: string;
@@ -100,6 +101,15 @@ export interface User {
   id: string;
   email: string;
   defaultModel: string | null;
+  isSuperadmin: boolean;
+}
+
+export interface ManagedUser {
+  id: string;
+  email: string;
+  isSuperadmin: boolean;
+  createdAt: string;
+  instanceCount: number;
 }
 
 export interface OpenRouterModel {
@@ -109,7 +119,7 @@ export interface OpenRouterModel {
 }
 
 export const api = {
-  getConfig: () => request<{ askEnabled: boolean; authRequired: boolean }>("/config"),
+  getConfig: () => request<{ askEnabled: boolean; needsSetup: boolean }>("/config"),
   signup: (email: string, password: string) =>
     request<User>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
@@ -163,4 +173,10 @@ export const api = {
   revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
   listAuditLog: (id: string) => request<AuditLogEntry[]>(`/instances/${id}/audit-log`),
   createBranch: (id: string, name?: string) => request<Instance>(`/instances/${id}/branches`, { method: "POST", body: JSON.stringify({ name }) }),
+
+  // Superadmin-only platform management (see control-plane/src/routes/admin.ts).
+  listUsers: () => request<ManagedUser[]>("/users"),
+  setUserSuperadmin: (id: string, isSuperadmin: boolean) =>
+    request<ManagedUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isSuperadmin }) }),
+  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
 };

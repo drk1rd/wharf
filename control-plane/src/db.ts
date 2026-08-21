@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   default_model TEXT,
+  is_superadmin INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -93,11 +94,27 @@ if (!instanceColumns.some((c) => c.name === "owner_id")) {
   db.exec(`ALTER TABLE instances ADD COLUMN owner_id TEXT`);
 }
 
+// is_superadmin was added after users first shipped — same reasoning as
+// owner_id above, so an existing self-hosted install's first-ever account
+// (which predates the mandatory first-boot setup flow) doesn't silently
+// become un-promotable to superadmin.
+const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+if (!userColumns.some((c) => c.name === "is_superadmin")) {
+  db.exec(`ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0`);
+  // An install upgrading from before this column existed may already have
+  // accounts with no superadmin among them — granting superadmin requires
+  // already being superadmin, so without this, upgrading would strand
+  // everyone with no way to reach the new management surface at all.
+  // Promote whoever signed up first, same as a fresh install's first signup.
+  db.exec(`UPDATE users SET is_superadmin = 1 WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)`);
+}
+
 export interface UserRow {
   id: string;
   email: string;
   password_hash: string;
   default_model: string | null;
+  is_superadmin: number;
   created_at: string;
 }
 
@@ -165,8 +182,8 @@ export interface AuditLogRow {
 export const usersRepo = {
   insert(row: UserRow) {
     db.prepare(
-      `INSERT INTO users (id, email, password_hash, default_model, created_at)
-       VALUES (@id, @email, @password_hash, @default_model, @created_at)`
+      `INSERT INTO users (id, email, password_hash, default_model, is_superadmin, created_at)
+       VALUES (@id, @email, @password_hash, @default_model, @is_superadmin, @created_at)`
     ).run(row);
   },
   getById(id: string): UserRow | undefined {
@@ -180,6 +197,19 @@ export const usersRepo = {
     if (fields.length === 0) return;
     const setClause = fields.map((f) => `${f} = @${f}`).join(", ");
     db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...patch, id });
+  },
+  /** Every account — the admin user-management panel is the only caller. */
+  list(): UserRow[] {
+    return db.prepare(`SELECT * FROM users ORDER BY created_at ASC`).all() as UserRow[];
+  },
+  remove(id: string) {
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(id);
+  },
+  count(): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }).n;
+  },
+  countSuperadmins(): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM users WHERE is_superadmin = 1`).get() as { n: number }).n;
   },
 };
 
@@ -195,6 +225,10 @@ export const sessionsRepo = {
   },
   removeExpired() {
     db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString());
+  },
+  /** Used when an admin deletes a user's account — signs out any session they still hold. */
+  removeForUser(userId: string) {
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
   },
 };
 
@@ -226,6 +260,17 @@ export const instancesRepo = {
     return db
       .prepare(`SELECT * FROM instances WHERE owner_id = ? OR owner_id IS NULL ORDER BY created_at DESC`)
       .all(ownerId) as InstanceRow[];
+  },
+  /**
+   * Exactly this owner's instances — unlike listForOwner, does NOT also
+   * include ownerless ones. Used only by admin user-deletion, to reassign
+   * (not display) what a removed account leaves behind.
+   */
+  listOwnedBy(ownerId: string): InstanceRow[] {
+    return db.prepare(`SELECT * FROM instances WHERE owner_id = ?`).all(ownerId) as InstanceRow[];
+  },
+  countOwnedBy(ownerId: string): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM instances WHERE owner_id = ?`).get(ownerId) as { n: number }).n;
   },
   remove(id: string) {
     db.prepare(`DELETE FROM instances WHERE id = ?`).run(id);

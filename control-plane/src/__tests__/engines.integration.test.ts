@@ -1,8 +1,6 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { startTestServer, Client, dockerAvailable } from "../testing/harness.js";
-import { runDueBackups } from "../backups.js";
-import { instancesRepo } from "../db.js";
+import { startTestServer, setupSuperadmin, dockerAvailable } from "../testing/harness.js";
 
 // These are the only tests in the suite that touch a real Docker daemon and
 // pull real images. They're written to run for real in CI (GitHub-hosted
@@ -14,7 +12,18 @@ const available = await dockerAvailable();
 const skip = available ? false : "no reachable Docker daemon — this is expected in network-restricted sandboxes, not in CI";
 
 const server = await startTestServer();
-const client = new Client(server.baseUrl);
+const client = await setupSuperadmin(server);
+// Dynamic, not static — same reasoning as harness.ts's own comment: db.js
+// (and backups.js, which imports it) read WHARF_DATA_DIR at module-load
+// time. A static import at the top of this file would be hoisted and
+// evaluated before startTestServer() above ever sets that env var, silently
+// binding to the real persistent control-plane/data/ dir instead of this
+// run's isolated temp one — which is exactly what happened here before this
+// comment existed (found for real: a second local run of this file 409'd
+// creating its superadmin account, because the first run's had persisted
+// to the real, un-isolated data directory).
+const { runDueBackups } = await import("../backups.js");
+const { instancesRepo } = await import("../db.js");
 
 async function waitForStatus(id: string, timeoutMs = 120_000): Promise<any> {
   const deadline = Date.now() + timeoutMs;
