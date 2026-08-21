@@ -24,6 +24,93 @@ function envVarFor(engine: string): string {
   }
 }
 
+interface FrameworkSnippet {
+  label: string;
+  code: string;
+}
+
+// Never inlines the actual secret — every snippet reads from the env var
+// shown right above it in the .env block, which is both safer to display
+// (no live password rendered into a copy-paste code sample) and more
+// realistic (that's how you'd actually wire it into an app).
+function frameworkSnippets(engine: string, envVar: string): FrameworkSnippet[] {
+  switch (engine) {
+    case "postgres":
+      return [
+        {
+          label: "Node.js (pg)",
+          code: `import { Client } from "pg";\n\nconst client = new Client({ connectionString: process.env.${envVar} });\nawait client.connect();\n\nconst { rows } = await client.query("SELECT * FROM customers LIMIT 10");`,
+        },
+        {
+          label: "Prisma",
+          code: `// prisma/schema.prisma\ndatasource db {\n  provider = "postgresql"\n  url      = env("${envVar}")\n}`,
+        },
+        {
+          label: "Python (psycopg2)",
+          code: `import os\nimport psycopg2\n\nconn = psycopg2.connect(os.environ["${envVar}"])\ncur = conn.cursor()\ncur.execute("SELECT * FROM customers LIMIT 10")\nrows = cur.fetchall()`,
+        },
+      ];
+    case "mysql":
+      return [
+        {
+          label: "Node.js (mysql2)",
+          code: `import mysql from "mysql2/promise";\n\nconst conn = await mysql.createConnection(process.env.${envVar});\nconst [rows] = await conn.query("SELECT * FROM customers LIMIT 10");`,
+        },
+        {
+          label: "Prisma",
+          code: `// prisma/schema.prisma\ndatasource db {\n  provider = "mysql"\n  url      = env("${envVar}")\n}`,
+        },
+        {
+          label: "Python (mysql-connector)",
+          code: `import os\nimport mysql.connector\nfrom urllib.parse import urlparse\n\nurl = urlparse(os.environ["${envVar}"])\nconn = mysql.connector.connect(\n    host=url.hostname, port=url.port,\n    user=url.username, password=url.password,\n    database=url.path.lstrip("/"),\n)`,
+        },
+      ];
+    case "mongodb":
+      return [
+        {
+          label: "Node.js (mongodb)",
+          code: `import { MongoClient } from "mongodb";\n\nconst client = new MongoClient(process.env.${envVar});\nawait client.connect();\n\nconst docs = await client.db().collection("customers").find().limit(10).toArray();`,
+        },
+        {
+          label: "Mongoose",
+          code: `import mongoose from "mongoose";\n\nawait mongoose.connect(process.env.${envVar});`,
+        },
+        {
+          label: "Python (pymongo)",
+          code: `import os\nfrom pymongo import MongoClient\n\nclient = MongoClient(os.environ["${envVar}"])\ndocs = list(client.get_default_database().customers.find().limit(10))`,
+        },
+      ];
+    case "redis":
+      return [
+        {
+          label: "Node.js (ioredis)",
+          code: `import Redis from "ioredis";\n\nconst redis = new Redis(process.env.${envVar});\nconst value = await redis.get("session:demo");`,
+        },
+        {
+          label: "Node.js (redis)",
+          code: `import { createClient } from "redis";\n\nconst client = createClient({ url: process.env.${envVar} });\nawait client.connect();\n\nconst value = await client.get("session:demo");`,
+        },
+        {
+          label: "Python (redis-py)",
+          code: `import os\nimport redis\n\nr = redis.from_url(os.environ["${envVar}"])\nvalue = r.get("session:demo")`,
+        },
+      ];
+    case "clickhouse":
+      return [
+        {
+          label: "Node.js (@clickhouse/client)",
+          code: `import { createClient } from "@clickhouse/client";\n\nconst client = createClient({ url: process.env.${envVar} });\nconst result = await client.query({ query: "SELECT * FROM customers LIMIT 10", format: "JSONEachRow" });\nconst rows = await result.json();`,
+        },
+        {
+          label: "Python (clickhouse-connect)",
+          code: `import os\nimport clickhouse_connect\n\nclient = clickhouse_connect.get_client(dsn=os.environ["${envVar}"])\nrows = client.query("SELECT * FROM customers LIMIT 10").result_rows`,
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
 function queryRunnerLabel(engine: string): string {
   switch (engine) {
     case "postgres":
@@ -243,6 +330,8 @@ function AskPanel({ instance }: { instance: Instance }) {
 function ConnectPanel({ instance }: { instance: Instance }) {
   const conn = instance.connection;
   const [revealed, setRevealed] = useState(false);
+  const snippets = frameworkSnippets(instance.engine, envVarFor(instance.engine));
+  const [snippetIndex, setSnippetIndex] = useState(0);
   if (!conn) return null;
   const envVar = envVarFor(instance.engine);
   const masked = conn.connectionString.replace(/:([^:@/]+)@/, ":••••••••@");
@@ -259,7 +348,43 @@ function ConnectPanel({ instance }: { instance: Instance }) {
       </div>
       <CopyField label="Connection URL" value={display} copyValue={conn.connectionString} />
       <CopyField label=".env" value={envSnippet} copyValue={`${envVar}=${conn.connectionString}`} />
+      {snippets.length > 0 && (
+        <div className="copy-field">
+          <div className="snippet-head">
+            <label>Code snippet</label>
+            <select value={snippetIndex} onChange={(e) => setSnippetIndex(Number(e.target.value))}>
+              {snippets.map((s, i) => (
+                <option key={s.label} value={i}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <CodeBlock code={snippets[snippetIndex].code} />
+        </div>
+      )}
     </section>
+  );
+}
+
+function CodeBlock({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="code-block">
+      <pre>
+        <code>{code}</code>
+      </pre>
+      <button
+        className="code-block-copy"
+        onClick={() => {
+          navigator.clipboard.writeText(code);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
   );
 }
 

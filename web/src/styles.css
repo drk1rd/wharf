@@ -482,6 +482,48 @@ button.ghost {
   white-space: nowrap;
 }
 
+.snippet-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.snippet-head select {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.code-block {
+  position: relative;
+}
+
+.code-block pre {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 60px 11px 11px;
+  margin: 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  white-space: pre;
+  color: var(--text);
+}
+
+.code-block-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
 .browse-layout {
   display: grid;
   grid-template-columns: 190px 1fr;
