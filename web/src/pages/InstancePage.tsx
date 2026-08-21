@@ -14,11 +14,52 @@ import {
 } from "../lib/api";
 import { formatBytes, formatPercent } from "../lib/format";
 import { downloadResultAsCsv, downloadResultAsJson } from "../lib/export";
+import { loadQueryHistory, pushQueryHistory } from "../lib/queryHistory";
 import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
 import { useAuth } from "../components/AuthProvider";
 
 type Tab = "simple" | "advanced";
+
+/** Reused for both the top-level Simple/Advanced switch and Advanced's own internal sections — one real underline tab bar instead of a bordered-button row. */
+function TabBar<T extends string>({
+  tabs,
+  active,
+  onChange,
+  sub,
+}: {
+  tabs: { id: T; label: string }[];
+  active: T;
+  onChange: (id: T) => void;
+  sub?: boolean;
+}) {
+  return (
+    <nav className={sub ? "tabs tabs-sub" : "tabs"}>
+      {tabs.map((t) => (
+        <button key={t.id} className={active === t.id ? "active" : ""} onClick={() => onChange(t.id)}>
+          {t.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
 
 function envVarFor(engine: string): string {
   switch (engine) {
@@ -204,6 +245,11 @@ export default function InstancePage() {
           <h1>{instance.name}</h1>
           <span className="sub">
             {instance.engine} {instance.version} · <span className={`status status-${instance.status}`}>{instance.status}</span>
+            {instance.tlsEnabled && (
+              <span className="tls-badge">
+                <LockIcon /> TLS
+              </span>
+            )}
           </span>
         </div>
         <button className="danger" onClick={handleDelete}>
@@ -221,14 +267,14 @@ export default function InstancePage() {
 
       {instance.status === "running" && (
         <>
-          <nav className="tabs">
-            <button className={tab === "simple" ? "active" : ""} onClick={() => setTab("simple")}>
-              Simple
-            </button>
-            <button className={tab === "advanced" ? "active" : ""} onClick={() => setTab("advanced")}>
-              Advanced
-            </button>
-          </nav>
+          <TabBar
+            tabs={[
+              { id: "simple", label: "Simple" },
+              { id: "advanced", label: "Advanced" },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
           {tab === "simple" ? <SimpleView instance={instance} /> : <AdvancedView instance={instance} />}
         </>
       )}
@@ -445,6 +491,7 @@ function BrowsePanel({ instance }: { instance: Instance }) {
   const [idColumn, setIdColumn] = useState("id");
   const [queryText, setQueryText] = useState("");
   const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
+  const [queryElapsedMs, setQueryElapsedMs] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importTarget, setImportTarget] = useState("");
@@ -496,8 +543,12 @@ function BrowsePanel({ instance }: { instance: Instance }) {
 
   async function runQuery() {
     setRunning(true);
+    const startedAt = performance.now();
     try {
-      setQueryResult(await api.runQuery(instance.id, queryText));
+      const result = await api.runQuery(instance.id, queryText);
+      setQueryResult(result);
+      setQueryElapsedMs(Math.round(performance.now() - startedAt));
+      pushQueryHistory(instance.id, queryText);
     } catch (err) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
@@ -573,6 +624,7 @@ function BrowsePanel({ instance }: { instance: Instance }) {
           {selected && sqlEngine(instance.engine) && rows && (
             <FilterBuilder columns={rows.columns ?? []} filters={filters} onChange={setFilters} onApply={applyFilters} />
           )}
+          {selected && rows && <p className="row-count-badge">{rows.rowCount} row{rows.rowCount === 1 ? "" : "s"}</p>}
           {rows ? (
             sqlEngine(instance.engine) ? (
               <EditableResultTable
@@ -595,22 +647,152 @@ function BrowsePanel({ instance }: { instance: Instance }) {
 
       <div className="query-runner">
         <h3>{queryRunnerLabel(instance.engine)}</h3>
-        <textarea
+        <QueryEditor
           value={queryText}
-          onChange={(e) => setQueryText(e.target.value)}
+          onChange={setQueryText}
+          onRun={runQuery}
+          running={running}
           placeholder={queryRunnerPlaceholder(instance.engine)}
-          rows={4}
+          historyKey={instance.id}
         />
-        <button className="primary" onClick={runQuery} disabled={running || !queryText.trim()}>
-          {running ? "Running…" : "Run"}
-        </button>
         {queryResult && (
-          <div style={{ marginTop: 14 }}>
+          <>
+            <div className="query-meta">
+              <span>
+                {queryResult.rowCount} row{queryResult.rowCount === 1 ? "" : "s"}
+              </span>
+              {queryElapsedMs !== null && <span>{queryElapsedMs} ms</span>}
+            </div>
             <ResultTable result={queryResult} />
-          </div>
+          </>
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * A real editor's worth of chrome around the query textarea — a
+ * line-number gutter kept in sync via scroll position, Cmd/Ctrl+Enter to
+ * run without reaching for the mouse, Tab inserting spaces instead of
+ * jumping focus away, and a small per-instance history (localStorage,
+ * queryHistory.ts) so a query you already wrote today is one click away
+ * instead of retyped. Deliberately no syntax highlighting or
+ * autocomplete — those need a real query-language grammar per engine
+ * (SQL dialect differences, Mongo's JSON-shaped queries, Redis commands)
+ * to do honestly, which is a bigger feature than this pass; this is the
+ * chrome an editor has regardless of language.
+ */
+function QueryEditor({
+  value,
+  onChange,
+  onRun,
+  running,
+  placeholder,
+  historyKey,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onRun: () => void;
+  running: boolean;
+  placeholder: string;
+  historyKey: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
+
+  // Re-reads on every historyKey change (a different instance) and every
+  // time a run finishes (running flips back to false) — the parent's
+  // runQuery() writes to localStorage after a successful call, but this
+  // component has no other way to know that just happened.
+  useEffect(() => {
+    if (!running) setHistory(loadQueryHistory(historyKey));
+  }, [historyKey, running]);
+
+  function syncScroll() {
+    if (gutterRef.current && textareaRef.current) {
+      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (!running && value.trim()) onRun();
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const next = value.slice(0, start) + "  " + value.slice(end);
+      onChange(next);
+      requestAnimationFrame(() => {
+        el.selectionStart = el.selectionEnd = start + 2;
+      });
+    }
+  }
+
+  const lines = Math.max(value.split("\n").length, 1);
+  const isMac = typeof navigator !== "undefined" && navigator.platform.includes("Mac");
+
+  return (
+    <>
+      <div className="query-toolbar">
+        <button className="primary" onClick={onRun} disabled={running || !value.trim()}>
+          {running ? <span className="spinner" /> : "Run"}
+        </button>
+        <button className="ghost" onClick={() => onChange("")} disabled={running || !value} title="Clear the query">
+          Clear
+        </button>
+        {history.length > 0 && (
+          <div style={{ position: "relative" }}>
+            <button className="ghost" onClick={() => setHistoryOpen((o) => !o)}>
+              History ({history.length})
+            </button>
+            {historyOpen && (
+              <div className="query-history">
+                {history.map((q, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      onChange(q);
+                      setHistoryOpen(false);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <span className="kbd-hint">
+          <kbd>{isMac ? "⌘" : "Ctrl"}</kbd>+<kbd>Enter</kbd> to run
+        </span>
+      </div>
+      <div className="query-editor">
+        <div className="query-editor-gutter" ref={gutterRef}>
+          {Array.from({ length: lines }).map((_, i) => (
+            <span key={i}>{i + 1}</span>
+          ))}
+        </div>
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onScroll={syncScroll}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          rows={6}
+          spellCheck={false}
+        />
+      </div>
+    </>
   );
 }
 
@@ -664,7 +846,7 @@ function FilterBuilder({
             onKeyDown={(e) => e.key === "Enter" && onApply()}
           />
           <button className="ghost filter-remove" onClick={() => removeFilter(i)} aria-label="Remove filter">
-            ×
+            <CloseIcon />
           </button>
         </div>
       ))}
@@ -1138,8 +1320,25 @@ function AdvancedView({ instance }: { instance: Instance }) {
     }
   }
 
+  const [advTab, setAdvTab] = useState<"overview" | "data" | "access" | "activity" | "logs">("overview");
+
   return (
     <div className="advanced-view">
+      <TabBar
+        sub
+        tabs={[
+          { id: "overview", label: "Overview" },
+          { id: "data", label: "Backups & branching" },
+          { id: "access", label: "Access" },
+          { id: "activity", label: "Activity" },
+          { id: "logs", label: "Logs" },
+        ]}
+        active={advTab}
+        onChange={setAdvTab}
+      />
+
+      {advTab === "overview" && (
+      <>
       <section className="panel">
         <h2>Metrics</h2>
         {stats ? (
@@ -1190,7 +1389,11 @@ function AdvancedView({ instance }: { instance: Instance }) {
         </div>
         <p className="empty">Takes effect immediately, no restart. Disk isn't live-resizable — a volume would need to be migrated.</p>
       </section>
+      </>
+      )}
 
+      {advTab === "data" && (
+      <>
       <section className="panel">
         <h2>Branching</h2>
         <p className="empty">
@@ -1276,7 +1479,11 @@ function AdvancedView({ instance }: { instance: Instance }) {
           </table>
         )}
       </section>
+      </>
+      )}
 
+      {advTab === "access" && (
+      <>
       <section className="panel">
         <h2>API tokens</h2>
         <p className="empty">
@@ -1349,7 +1556,11 @@ function AdvancedView({ instance }: { instance: Instance }) {
           </table>
         )}
       </section>
+      </>
+      )}
 
+      {advTab === "activity" && (
+      <>
       <section className="panel">
         <h2>Activity</h2>
         {auditLog.length === 0 ? (
@@ -1377,7 +1588,10 @@ function AdvancedView({ instance }: { instance: Instance }) {
           </table>
         )}
       </section>
+      </>
+      )}
 
+      {advTab === "logs" && (
       <section className="panel">
         <h2>Logs</h2>
         {logsError && !logs ? (
@@ -1386,6 +1600,7 @@ function AdvancedView({ instance }: { instance: Instance }) {
           <pre className="logs">{logs || "(no logs yet)"}</pre>
         )}
       </section>
+      )}
     </div>
   );
 }

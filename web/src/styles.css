@@ -571,12 +571,57 @@ button.ghost {
   border-color: transparent;
 }
 
+/*
+ * A real underline tab bar, not two bordered buttons sitting above a
+ * divider — the active tab's underline sits flush against the bar's own
+ * border so it reads as one continuous control, the same shape every
+ * editor-like product (an IDE's panel tabs, a spreadsheet's sheet tabs)
+ * uses. .tabs-sub is the same idea at a smaller scale, for the Advanced
+ * view's own internal sections (Overview/Backups/Access/Activity/Logs) —
+ * splitting what used to be seven panels stacked in one long scroll into
+ * real navigation instead of more scrolling.
+ */
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 4px;
+  margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
+}
+
+.tabs button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 4px;
+  margin-right: 22px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tabs button:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--text);
+}
+
+.tabs button.active {
+  background: transparent;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 650;
+}
+
+.tabs-sub {
+  margin-bottom: 20px;
+}
+
+.tabs-sub button {
+  font-size: 13px;
+  padding: 8px 2px;
+  margin-right: 18px;
 }
 
 .panel {
@@ -699,7 +744,7 @@ button.ghost {
 
 .browse-layout {
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 220px 1fr;
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -725,20 +770,27 @@ button.ghost {
 
 .import-row {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   margin-bottom: 10px;
 }
 
 .import-target {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
   font-size: 12px;
-  padding: 5px 8px;
+  padding: 6px 9px;
 }
 
 .import-button {
+  width: 100%;
+  text-align: center;
   font-size: 12px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -840,8 +892,8 @@ button.ghost {
   border-color: transparent;
   color: var(--muted);
   padding: 4px 8px;
-  font-size: 15px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-remove:hover:not(:disabled) {
@@ -962,8 +1014,32 @@ button.ghost {
   white-space: nowrap;
 }
 
+.result-table tbody tr:nth-child(even):not(.editing-row) {
+  background: color-mix(in srgb, var(--panel-2) 45%, transparent);
+}
+
 .result-table tbody tr:hover {
   background: var(--panel-2);
+}
+
+.row-count-badge {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tls-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .result-table th {
@@ -981,17 +1057,139 @@ button.ghost {
   border-top: 1px solid var(--border);
 }
 
-.query-runner textarea {
-  width: 100%;
-  background: var(--panel-2);
-  color: var(--text);
+.query-runner h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * A real editor chrome around the query textarea — a line-number gutter
+ * that scrolls in lockstep with the text, not just a bare <textarea> —
+ * since a plain text box is exactly the "form-like" feeling this pass is
+ * fixing. The gutter is a second scrollable element kept in sync via JS
+ * (InstancePage.tsx's onScroll handler), so both need identical
+ * line-height/font/padding-top or they drift apart by a pixel a line.
+ */
+.query-editor {
+  display: flex;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.query-editor:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.query-editor-gutter {
+  flex: none;
+  width: 38px;
+  padding: 11px 0;
+  text-align: right;
+  background: color-mix(in srgb, var(--panel-2) 60%, var(--bg));
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  user-select: none;
+}
+
+.query-editor-gutter span {
+  display: block;
+  padding-right: 8px;
+}
+
+.query-editor textarea {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--text);
+  border: none;
   padding: 11px;
   font-family: var(--font-mono);
   font-size: 13px;
-  margin-bottom: 10px;
+  line-height: 1.5;
   resize: vertical;
+}
+
+.query-editor textarea:focus {
+  outline: none;
+}
+
+.query-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.query-toolbar .kbd-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.query-toolbar kbd {
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.query-history {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 6px;
+}
+
+.query-history button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-history button:hover {
+  background: var(--panel-2);
+  border-color: transparent;
+}
+
+.query-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ask-row,
@@ -1225,6 +1423,7 @@ input:focus-visible {
   box-shadow: var(--shadow);
   animation: toast-in 0.18s ease;
   max-width: 340px;
+  cursor: pointer;
 }
 
 @keyframes toast-in {

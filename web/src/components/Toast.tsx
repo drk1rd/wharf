@@ -32,12 +32,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, 3500);
   }, []);
 
+  function dismiss(id: number) {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }
+
   return (
     <ToastContext.Provider value={{ push }}>
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`}>
+          <div key={t.id} className={`toast toast-${t.kind}`} onClick={() => dismiss(t.id)}>
             {t.message}
           </div>
         ))}
