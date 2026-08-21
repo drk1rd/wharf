@@ -62,12 +62,32 @@ export default function Dashboard() {
     }
   }
 
+  const runningCount = instances?.filter((i) => i.status === "running").length ?? 0;
+  const tlsCount = instances?.filter((i) => i.tlsEnabled).length ?? 0;
+
   return (
     <div>
       <div className="hero">
         <h1>Your databases</h1>
         <p>Create a Postgres, MySQL, ClickHouse, MongoDB, or Redis instance, get a connection URL, and browse the data — all in one place.</p>
       </div>
+
+      {instances !== null && instances.length > 0 && (
+        <div className="stats-row">
+          <div className="metric">
+            <span className="metric-label">Databases</span>
+            <span className="metric-value">{instances.length}</span>
+          </div>
+          <div className="metric">
+            <span className="metric-label">Running</span>
+            <span className="metric-value">{runningCount}</span>
+          </div>
+          <div className="metric">
+            <span className="metric-label">TLS-enabled</span>
+            <span className="metric-value">{tlsCount}</span>
+          </div>
+        </div>
+      )}
 
       <section className="section">
         <div className="section-heading-row">

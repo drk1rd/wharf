@@ -196,7 +196,7 @@ body {
 }
 
 .content-inner {
-  max-width: 860px;
+  max-width: 1040px;
 }
 
 .theme-toggle {
@@ -808,11 +808,27 @@ button.ghost {
   right: 8px;
 }
 
+/*
+ * The Data tab's own dedicated workspace, not another .panel card stacked
+ * among others — this is the whole content of the tab, so it gets the
+ * room a real data-browsing tool needs (a taller object list, a taller
+ * row table) rather than being squeezed under Connect/Ask the way it used
+ * to be when all three shared one Simple-view column.
+ */
+.browse-workspace {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
 .browse-layout {
   display: grid;
   grid-template-columns: 220px 1fr;
   gap: 16px;
   margin-bottom: 20px;
+  align-items: start;
 }
 
 @media (max-width: 720px) {
@@ -877,7 +893,7 @@ button.ghost {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 340px;
+  max-height: 60vh;
   overflow-y: auto;
 }
 
@@ -1060,7 +1076,7 @@ button.ghost {
 
 .table-scroll {
   overflow-x: auto;
-  max-height: 380px;
+  max-height: 60vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1380,6 +1396,19 @@ input:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
+}
+
+/* Dashboard's compact summary strip — same tile look as the instance
+   page's Metrics grid, but a flex row of fixed-width tiles rather than a
+   stretching grid, since three numbers don't need to fill the page width. */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stats-row .metric {
+  min-width: 110px;
 }
 
 .metric {

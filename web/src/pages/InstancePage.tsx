@@ -19,7 +19,7 @@ import { useToast } from "../components/Toast";
 import { useConfirm } from "../components/ConfirmDialog";
 import { useAuth } from "../components/AuthProvider";
 
-type Tab = "simple" | "advanced";
+type Tab = "simple" | "data" | "advanced";
 
 /** Reused for both the top-level Simple/Advanced switch and Advanced's own internal sections — one real underline tab bar instead of a bordered-button row. */
 function TabBar<T extends string>({
@@ -270,12 +270,19 @@ export default function InstancePage() {
           <TabBar
             tabs={[
               { id: "simple", label: "Simple" },
+              { id: "data", label: "Data" },
               { id: "advanced", label: "Advanced" },
             ]}
             active={tab}
             onChange={setTab}
           />
-          {tab === "simple" ? <SimpleView instance={instance} /> : <AdvancedView instance={instance} />}
+          {tab === "simple" ? (
+            <SimpleView instance={instance} />
+          ) : tab === "data" ? (
+            <BrowsePanel instance={instance} />
+          ) : (
+            <AdvancedView instance={instance} />
+          )}
         </>
       )}
     </div>
@@ -287,7 +294,6 @@ function SimpleView({ instance }: { instance: Instance }) {
     <div className="simple-view">
       <ConnectPanel instance={instance} />
       <AskPanel instance={instance} />
-      <BrowsePanel instance={instance} />
     </div>
   );
 }
@@ -578,8 +584,7 @@ function BrowsePanel({ instance }: { instance: Instance }) {
   }
 
   return (
-    <section className="panel">
-      <h2>Browse data</h2>
+    <div className="browse-workspace">
       <div className="browse-layout">
         <div className="object-list">
           <h3>{label}</h3>
@@ -667,7 +672,7 @@ function BrowsePanel({ instance }: { instance: Instance }) {
           </>
         )}
       </div>
-    </section>
+    </div>
   );
 }
 
