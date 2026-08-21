@@ -5,7 +5,7 @@ import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
 import { createInstanceContainer, stopAndRemoveContainer, updateContainerResources, waitForPort } from "./docker.js";
 import { canAccessInstance, type AuthContext } from "./auth.js";
 import { getBrowserAdapter } from "./browser/registry.js";
-import { createBackup, deleteBackupsForInstance, restoreBackup } from "./backups.js";
+import { createBackup, deleteBackupsForInstance, restoreBackupInto } from "./backups.js";
 
 // The host used in connection strings handed to users/clients — wherever the
 // docker daemon's published ports are actually reachable from (typically the
@@ -296,7 +296,7 @@ export async function createBranch(sourceId: string, auth: AuthContext, name?: s
 
   try {
     const ready = await waitForInstanceRunning(branch.id);
-    await restoreBackup(ready, backup.id);
+    await restoreBackupInto(ready, backup);
     return instancesRepo.get(branch.id)!;
   } catch (err) {
     // Don't leave a half-created, data-less instance sitting around under a

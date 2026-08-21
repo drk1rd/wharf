@@ -155,14 +155,10 @@ export async function runDueBackups(getInstance: (id: string) => InstanceRow | u
   }
 }
 
-export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {
+async function applyRestore(row: InstanceRow, data: Buffer): Promise<void> {
   const manifest = getManifest(row.engine);
   if (!manifest) throw new Error(`unknown engine: ${row.engine}`);
   if (!row.container_id) throw new Error("instance has no running container");
-
-  const backup = backupsRepo.get(backupId);
-  if (!backup || backup.instance_id !== row.id) throw new Error("backup not found for this instance");
-  const data = await fs.readFile(backup.file_path);
 
   if (manifest.backup) {
     const secrets = secretsOf(row);
@@ -175,4 +171,24 @@ export async function restoreBackup(row: InstanceRow, backupId: string): Promise
   const connectionString = internalConnectionString(row);
   if (!connectionString) throw new Error("instance has no connection info yet");
   await adapter.restoreAll(connectionString, data);
+}
+
+export async function restoreBackup(row: InstanceRow, backupId: string): Promise<void> {
+  const backup = backupsRepo.get(backupId);
+  if (!backup || backup.instance_id !== row.id) throw new Error("backup not found for this instance");
+  const data = await fs.readFile(backup.file_path);
+  await applyRestore(row, data);
+}
+
+/**
+ * Used only by createBranch (instances.ts): restores a backup into a
+ * DIFFERENT instance than the one it was taken from — that's the entire
+ * point of branching, so this deliberately skips restoreBackup's
+ * same-instance check rather than relaxing that check for everyone. The
+ * public restore route still only ever accepts a backup belonging to the
+ * instance it's restoring into.
+ */
+export async function restoreBackupInto(row: InstanceRow, backup: BackupRow): Promise<void> {
+  const data = await fs.readFile(backup.file_path);
+  await applyRestore(row, data);
 }
