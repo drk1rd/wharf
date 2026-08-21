@@ -5,7 +5,7 @@ import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
 import { createInstanceContainer, stopAndRemoveContainer, updateContainerResources, waitForPort } from "./docker.js";
 import { canAccessInstance, type AuthContext } from "./auth.js";
 import { getBrowserAdapter } from "./browser/registry.js";
-import { deleteBackupsForInstance } from "./backups.js";
+import { createBackup, deleteBackupsForInstance, restoreBackup } from "./backups.js";
 
 // The host used in connection strings handed to users/clients — wherever the
 // docker daemon's published ports are actually reachable from (typically the
@@ -257,6 +257,53 @@ export async function resizeInstance(id: string, auth: AuthContext, opts: { cpu?
     ...(opts.memoryMb !== undefined ? { memory_mb: opts.memoryMb } : {}),
   });
   return instancesRepo.get(id)!;
+}
+
+/** Polls the DB until an instance settles — production use (createBranch, below), not just the test harness's own copy of this pattern. */
+export async function waitForInstanceRunning(id: string, timeoutMs = 90_000): Promise<InstanceRow> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const row = instancesRepo.get(id);
+    if (!row) throw new Error("instance disappeared while waiting for it to become ready");
+    if (row.status === "running") return row;
+    if (row.status === "error") throw new Error(`branch's new instance failed to provision: ${row.error}`);
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("branch's new instance did not become ready in time");
+}
+
+/**
+ * Clones a running instance's current data into a brand-new one — the
+ * source keeps running untouched throughout. Built entirely from existing,
+ * already-proven pieces (createBackup/restoreBackup, createInstance) rather
+ * than real Docker volume snapshotting: that would be faster, but it's
+ * riskier, engine-specific, and unverifiable in this sandbox — the same
+ * reasoning that picked JSONEachRow over an unverified clickhouse-client
+ * pipeline for backups earlier this session. A slower mechanism that's
+ * already proven beats a faster one that isn't.
+ *
+ * Synchronous from the caller's perspective: this doesn't return until the
+ * new instance is fully running AND has the source's data, not just created.
+ */
+export async function createBranch(sourceId: string, auth: AuthContext, name?: string): Promise<InstanceRow> {
+  const source = requireRunningInstance(sourceId, auth);
+  const manifest = getManifest(source.engine);
+  if (!manifest) throw new Error(`unknown engine: ${source.engine}`);
+
+  const backup = await createBackup(source);
+  const branchName = name?.trim() || `${source.name}-branch-${Date.now()}`;
+  const branch = await createInstance(branchName, source.engine, source.owner_id, source.version);
+
+  try {
+    const ready = await waitForInstanceRunning(branch.id);
+    await restoreBackup(ready, backup.id);
+    return instancesRepo.get(branch.id)!;
+  } catch (err) {
+    // Don't leave a half-created, data-less instance sitting around under a
+    // name that implies it's a real copy of the source.
+    await deleteInstance(branch.id, auth).catch(() => undefined);
+    throw err;
+  }
 }
 
 function notFound(): never {

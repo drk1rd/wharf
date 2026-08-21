@@ -601,6 +601,8 @@ function formatCell(value: unknown): string {
 function AdvancedView({ instance }: { instance: Instance }) {
   const toast = useToast();
   const confirmDialog = useConfirm();
+  const navigate = useNavigate();
+  const [branching, setBranching] = useState(false);
   const [stats, setStats] = useState<ContainerStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [logs, setLogs] = useState("");
@@ -667,6 +669,20 @@ function AdvancedView({ instance }: { instance: Instance }) {
       toast.push(err instanceof Error ? err.message : String(err), "error");
     } finally {
       setResizing(false);
+    }
+  }
+
+  async function handleBranch() {
+    setBranching(true);
+    try {
+      toast.push("Creating a branch — this copies the current data into a new instance, can take a minute…", "success");
+      const branch = await api.createBranch(instance.id);
+      toast.push(`Branch "${branch.name}" is ready.`, "success");
+      navigate(`/instances/${branch.id}`);
+    } catch (err) {
+      toast.push(err instanceof Error ? err.message : String(err), "error");
+    } finally {
+      setBranching(false);
     }
   }
 
@@ -810,6 +826,17 @@ function AdvancedView({ instance }: { instance: Instance }) {
           </button>
         </div>
         <p className="empty">Takes effect immediately, no restart. Disk isn't live-resizable — a volume would need to be migrated.</p>
+      </section>
+
+      <section className="panel">
+        <h2>Branching</h2>
+        <p className="empty">
+          Creates a brand-new, fully independent instance starting from this one's current data — safe to test a risky query or
+          migration against, without touching this instance. Takes a minute or two, since it provisions a whole new database.
+        </p>
+        <button onClick={handleBranch} disabled={branching}>
+          {branching ? "Creating branch…" : "Create a branch"}
+        </button>
       </section>
 
       <section className="panel">

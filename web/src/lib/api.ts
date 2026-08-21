@@ -162,4 +162,5 @@ export const api = {
     }),
   revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
   listAuditLog: (id: string) => request<AuditLogEntry[]>(`/instances/${id}/audit-log`),
+  createBranch: (id: string, name?: string) => request<Instance>(`/instances/${id}/branches`, { method: "POST", body: JSON.stringify({ name }) }),
 };

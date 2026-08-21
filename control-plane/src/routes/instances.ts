@@ -1,7 +1,7 @@
 import { Router, type Response } from "express";
 import { instancesRepo, type InstanceRow } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
-import { connectionInfo, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
+import { connectionInfo, createBranch, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
 import { backupSupported, createBackup, getBackupSchedule, listBackups, restoreBackup, setBackupSchedule } from "../backups.js";
 import { listApiTokens, mintApiToken, ownerIdFor, requireWriteAccess, revokeApiToken } from "../auth.js";
@@ -130,6 +130,21 @@ instancesRouter.patch("/instances/:id/resize", async (req, res) => {
     const row = await resizeInstance(req.params.id, req.auth!, { cpu, memoryMb });
     recordAudit(req.params.id, req.auth!, "resize", `cpu=${cpu ?? "-"} memoryMb=${memoryMb ?? "-"}`);
     res.json(publicInstance(row));
+  } catch (err) {
+    respondError(res, err);
+  }
+});
+
+instancesRouter.post("/instances/:id/branches", async (req, res) => {
+  try {
+    if (req.auth!.kind === "scoped") {
+      res.status(403).json({ error: "a scoped token can't create branches — it's bound to a single existing instance" });
+      return;
+    }
+    const { name } = req.body ?? {};
+    const branch = await createBranch(req.params.id, req.auth!, typeof name === "string" ? name : undefined);
+    recordAudit(req.params.id, req.auth!, "branch.create", `${branch.id} (${branch.name})`);
+    res.status(201).json(publicInstance(branch));
   } catch (err) {
     respondError(res, err);
   }

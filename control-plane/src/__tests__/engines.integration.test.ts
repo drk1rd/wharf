@@ -34,7 +34,7 @@ async function createAndWait(engine: string) {
   return settled;
 }
 
-test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_000 }, async () => {
+test("postgres: create, connect, browse, query, backup", { skip, timeout: 240_000 }, async () => {
   const instance = await createAndWait("postgres");
   assert.ok(instance.connection?.connectionString.startsWith("postgres://"));
 
@@ -97,6 +97,27 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 150_00
   await runDueBackups((id) => instancesRepo.get(id));
   const afterSecondRun = await client.get(`/api/instances/${instance.id}/backups`);
   assert.equal(afterSecondRun.body.length, afterFirstRun.body.length, "not due yet — a second run right away shouldn't create another");
+
+  // Branching: the whole point is a real, independent copy — not a proxy or
+  // a reference. Branch from the current state (4 customers, post-import),
+  // then mutate the source only and confirm the branch doesn't see it.
+  const branched = await client.post(`/api/instances/${instance.id}/branches`, {});
+  assert.equal(branched.status, 201, `branch should return 201 (got ${branched.status}: ${JSON.stringify(branched.body)})`);
+  assert.equal(branched.body.status, "running");
+  assert.ok(branched.body.connection?.connectionString.startsWith("postgres://"));
+
+  const branchCount = await client.post(`/api/instances/${branched.body.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
+  assert.equal(Number(branchCount.body.rows[0].n), 4, "the branch should start with exactly the source's data at branch time");
+
+  await client.post(`/api/instances/${instance.id}/browse/query`, {
+    query: "INSERT INTO customers (name, email) VALUES ('Source Only', 'source-only@example.com')",
+  });
+  const sourceAfter = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
+  assert.equal(Number(sourceAfter.body.rows[0].n), 5, "the source should reflect its own new row");
+  const branchAfter = await client.post(`/api/instances/${branched.body.id}/browse/query`, { query: "SELECT count(*) AS n FROM customers" });
+  assert.equal(Number(branchAfter.body.rows[0].n), 4, "the branch must not see a row inserted into the source after branching — it's a real copy, not a proxy");
+
+  await client.delete(`/api/instances/${branched.body.id}`);
 
   const del = await client.delete(`/api/instances/${instance.id}`);
   assert.equal(del.status, 204, `delete should return 204 (got ${del.status}: ${JSON.stringify(del.body)})`);
