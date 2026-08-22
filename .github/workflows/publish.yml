@@ -40,9 +40,14 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          # Keep the "v" prefix so image tags match the git release tag
+          # exactly (v1.2.0, not 1.2.0) — metadata-action strips it by
+          # default under plain `{{version}}`, which would leave
+          # `docker pull ...:v1.2.0` 404ing right after a release titled
+          # v1.2.0, so it's pinned explicitly here instead.
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
             type=raw,value=latest
 
       - uses: docker/setup-buildx-action@v3
