@@ -1,0 +1,19 @@
+# Overlay that builds both images from source instead of pulling from
+# GHCR — for local development, or for anyone deploying before the first
+# version tag has been published. Requires the full repo checkout (not
+# just this deploy/ directory) since the build context is the repo root.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+services:
+  control-plane:
+    image: !reset null
+    build:
+      context: ..
+      dockerfile: control-plane/Dockerfile
+
+  web:
+    image: !reset null
+    build:
+      context: ..
+      dockerfile: web/Dockerfile

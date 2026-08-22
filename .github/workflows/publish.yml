@@ -1,0 +1,57 @@
+name: Publish images
+
+# Deliberately NOT on every push to main — only when a version tag is
+# pushed (i.e. a release is cut). That's the point of this workflow: it
+# lets self-hosters `docker pull` a specific released version instead of
+# building from source, without publishing an untagged image on every
+# commit that lands on main.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+# Needed to push to GHCR with the workflow's own GITHUB_TOKEN — no extra
+# secret to configure.
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: wharf-control-plane
+            dockerfile: control-plane/Dockerfile
+          - image: wharf-web
+            dockerfile: web/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
