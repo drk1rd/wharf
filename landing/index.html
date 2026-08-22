@@ -9,7 +9,7 @@
 <meta property="og:description" content="Spin up Postgres, MongoDB, MySQL, Redis, or ClickHouse; get a connection URL and a real data browser. Open source, Apache-2.0." />
 <meta property="og:type" content="website" />
 <meta name="theme-color" content="#0A0F1A" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect width='24' height='24' rx='4' fill='%230A0F1A'/%3E%3Cpath d='M3 18h18' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M6 18V9M12 18V5M18 18V11' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0' stroke='%233FBFA6' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect width='24' height='24' rx='4' fill='%230A0F1A'/%3E%3Cpath d='M3 18h18' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M6 18V9M12 18V5M18 18V11' stroke='%23E8A33D' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,500;1,9..144,600&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -429,7 +429,6 @@
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M3 18h18" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
         <path d="M6 18V9M12 18V5M18 18V11" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
-        <path d="M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0" stroke="#3FBFA6" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
       <span class="brand-word">Wharf</span>
       <span class="brand-tag">where your data docks</span>
@@ -439,9 +438,9 @@
       <a href="#engines">Engines</a>
       <a href="#proof">Proof</a>
       <a href="#quickstart">Self-host</a>
-      <a href="https://github.com/drk1rd/alldb/blob/main/PLAN.md">Plan</a>
+      <a href="https://github.com/drk1rd/wharf/blob/main/PLAN.md">Plan</a>
     </div>
-    <a class="btn btn-amber" href="https://github.com/drk1rd/alldb">View source →</a>
+    <a class="btn btn-amber" href="https://github.com/drk1rd/wharf">View source →</a>
   </nav>
 </header>
 
@@ -457,7 +456,7 @@
         <p class="lede">PostgreSQL, MongoDB, MySQL, Redis, and ClickHouse — provisioned from one control plane, handed back as a connection URL, and opened in a data browser worth using twice. No per-engine console to relearn.</p>
         <div class="cta-row">
           <a class="btn btn-amber" href="#quickstart">Dock a database →</a>
-          <a class="btn btn-ghost" href="https://github.com/drk1rd/alldb">Read the source</a>
+          <a class="btn btn-ghost" href="https://github.com/drk1rd/wharf">Read the source</a>
         </div>
         <dl class="stat-strip">
           <div>
@@ -616,9 +615,9 @@
   <section id="duality">
     <div class="wrap">
       <div class="section-head">
-        <p class="eyebrow">ONE INSTANCE, TWO VIEWS</p>
-        <h2>Adapts to whoever's looking — not two products.</h2>
-        <p>The default view hides everything except connect and browse. One click away, the same instance shows raw config, live metrics, logs, and a shell. Nothing is duplicated, nothing is a paid unlock.</p>
+        <p class="eyebrow">ONE INSTANCE, ADAPTS TO WHO'S LOOKING</p>
+        <h2>A quick glance or a real workspace — same instance, not different products.</h2>
+        <p>Simple hands back a connection URL and asks your data a question in plain English. Data is a real workspace — table list, filters, inline editing, a full query editor. Advanced is raw config, live metrics, logs, and a shell. Nothing is duplicated, nothing is a paid unlock.</p>
       </div>
       <div class="duality">
         <figure class="shot">
@@ -626,8 +625,8 @@
           <figcaption><span class="who">The dock</span><span class="what">All instances, one screen</span></figcaption>
         </figure>
         <figure class="shot">
-          <img src="assets/instance-simple.png" alt="Wharf instance page in Simple view, showing the connection URL, an env snippet, and a browse-data panel" width="1280" height="900" />
-          <figcaption><span class="who">Simple view</span><span class="what">Connect + browse, nothing else</span></figcaption>
+          <img src="assets/instance-data.png" alt="Wharf instance page, Data view, showing the table list, row filters, an editable row table, and the SQL query editor" width="1280" height="900" />
+          <figcaption><span class="who">Data view</span><span class="what">Browse, filter, edit, query</span></figcaption>
         </figure>
       </div>
     </div>
@@ -663,11 +662,11 @@
         <p class="eyebrow">SELF-HOST IN ONE COMMAND</p>
         <h2>Zero to a running database in under five minutes.</h2>
         <p>Requires Docker and Docker Compose. Runs on your own laptop, a spare box, or a VPS — same OSS core either way, nothing held back for a hosted tier.</p>
-        <a class="btn btn-amber" href="https://github.com/drk1rd/alldb#quickstart-self-host">Read the full quickstart →</a>
+        <a class="btn btn-amber" href="https://github.com/drk1rd/wharf#quickstart-self-host">Read the full quickstart →</a>
       </div>
       <div>
         <div class="copyline">
-          <code id="compose-cmd">cd deploy &amp;&amp; docker compose up --build</code>
+          <code id="compose-cmd">cd deploy &amp;&amp; docker compose up</code>
           <button type="button" onclick="copyCmd(this)">Copy</button>
         </div>
       </div>
@@ -683,8 +682,7 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M3 18h18" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
           <path d="M6 18V9M12 18V5M18 18V11" stroke="#E8A33D" stroke-width="2" stroke-linecap="round"/>
-          <path d="M2 21c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0" stroke="#3FBFA6" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
+          </svg>
         <span class="brand-word">Wharf</span>
       </a>
       <p class="legal">Apache-2.0 licensed. Open source, self-hosted or managed.</p>
@@ -693,10 +691,10 @@
       <div>
         <h4>Project</h4>
         <ul>
-          <li><a href="https://github.com/drk1rd/alldb">GitHub</a></li>
-          <li><a href="https://github.com/drk1rd/alldb/blob/main/PLAN.md">Plan &amp; roadmap</a></li>
-          <li><a href="https://github.com/drk1rd/alldb/blob/main/README.md">Documentation</a></li>
-          <li><a href="https://github.com/drk1rd/alldb/blob/main/LICENSE">License</a></li>
+          <li><a href="https://github.com/drk1rd/wharf">GitHub</a></li>
+          <li><a href="https://github.com/drk1rd/wharf/blob/main/PLAN.md">Plan &amp; roadmap</a></li>
+          <li><a href="https://github.com/drk1rd/wharf/blob/main/README.md">Documentation</a></li>
+          <li><a href="https://github.com/drk1rd/wharf/blob/main/LICENSE">License</a></li>
         </ul>
       </div>
       <div>

@@ -4,13 +4,13 @@
   "version": "0.1.0",
   "description": "Wharf — spin up, browse, and connect to any database. One place, every engine.",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/drk1rd/alldb#readme",
+  "homepage": "https://github.com/drk1rd/wharf#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/drk1rd/alldb.git"
+    "url": "git+https://github.com/drk1rd/wharf.git"
   },
   "bugs": {
-    "url": "https://github.com/drk1rd/alldb/issues"
+    "url": "https://github.com/drk1rd/wharf/issues"
   },
   "keywords": [
     "database",

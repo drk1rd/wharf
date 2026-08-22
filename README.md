@@ -2,21 +2,21 @@
 
 **Where your data docks.** Spin up a database, get a URL, look at your data — in one place, done exceptionally well.
 
-[![CI](https://github.com/drk1rd/alldb/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drk1rd/alldb/actions/workflows/ci.yml)
+[![CI](https://github.com/drk1rd/wharf/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/drk1rd/wharf/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 ![Postgres · MongoDB · MySQL · Redis · ClickHouse](https://img.shields.io/badge/engines-Postgres%20%C2%B7%20MongoDB%20%C2%B7%20MySQL%20%C2%B7%20Redis%20%C2%B7%20ClickHouse-informational)
 
-[Landing page source](./landing) (not yet deployed to a live URL — see `landing/README.md` to preview or deploy it) &middot; [Contributing](./CONTRIBUTING.md) &middot; [Security policy](./SECURITY.md)
+[wharf.pages.dev](https://wharf.pages.dev) &middot; [Landing page source](./landing) (see `landing/README.md` to preview or redeploy it) &middot; [Contributing](./CONTRIBUTING.md) &middot; [Security policy](./SECURITY.md)
 
 ![Wharf dashboard](./docs/screenshots/dashboard.png)
 
-Open source. Self-host it on your own infrastructure, or run one shared instance and give people accounts on it — same product either way. Every instance adapts to who's looking at it: a **Simple** view (connection URL, `.env` snippet, browse button) by default, an **Advanced** view (metrics, logs, config, backups) one click away — same instance, not two products.
+Open source. Self-host it on your own infrastructure, or run one shared instance and give people accounts on it — same product either way. Every instance adapts to who's looking at it: a **Simple** view (connection URL, `.env` snippet, and the Ask-your-data box) by default, a dedicated **Data** view (table/collection browser, filters, inline editing, the query editor) and an **Advanced** view (metrics, logs, config, backups) one click away — same instance, not three products.
 
-![Wharf instance page](./docs/screenshots/instance-simple.png)
+![Wharf instance page, Data view](./docs/screenshots/instance-data.png)
 
 Ships **PostgreSQL, MongoDB, MySQL, Redis, and ClickHouse**, real user accounts, live CPU/memory resize with no restart, CSV/JSON export, and an **Ask your data** natural-language query box backed by [OpenRouter](https://openrouter.ai) with your choice of model. See [`PLAN.md`](./PLAN.md) for the full product plan, the competitive reasoning behind the scope, and an honest go/no-go assessment.
 
-> This repo was previously named `alldb`; the product is now called **Wharf**. The git repository name is unchanged.
+> This repo was previously named `alldb`; both the product and the GitHub repository are now called **Wharf** (`drk1rd/wharf`).
 
 ## Quickstart (self-host)
 
