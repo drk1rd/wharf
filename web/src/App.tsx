@@ -1,4 +1,4 @@
-import { Routes, Route, Link } from "react-router-dom";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import InstancePage from "./pages/InstancePage";
 import Settings from "./pages/Settings";
@@ -10,32 +10,49 @@ import { ConfirmProvider } from "./components/ConfirmDialog";
 import { AuthProvider, useAuth } from "./components/AuthProvider";
 
 function Shell() {
-  const { loading, authRequired, user } = useAuth();
+  const { loading, user } = useAuth();
+  const location = useLocation();
 
   if (loading) return null;
-  if (authRequired && !user) return <AuthPage />;
+  // No anonymous-access mode anymore — a signed-in user is always required,
+  // whether that means signing in, signing up, or (on a fresh instance)
+  // completing the mandatory superadmin setup step. AuthPage itself decides
+  // which of those to show, based on needsSetup.
+  if (!user) return <AuthPage />;
+
+  const onDashboard = location.pathname === "/" || location.pathname.startsWith("/instances/");
 
   return (
-    <div className="app">
-      <header className="topbar">
+    <div className="app-shell">
+      <aside className="sidebar">
         <Link to="/" className="brand">
           <Logo />
           Wharf
         </Link>
-        <span className="tagline">where your data docks</span>
-        <span className="topbar-spacer" />
-        {user && <span className="topbar-email">{user.email}</span>}
-        <Link to="/settings" className="theme-toggle" title="Settings" aria-label="Settings">
-          ⚙
-        </Link>
-        <ThemeToggle />
-      </header>
+        <nav className="sidebar-nav">
+          <Link to="/" className={`sidebar-link ${onDashboard ? "active" : ""}`}>
+            Databases
+          </Link>
+          <Link to="/settings" className={`sidebar-link ${location.pathname === "/settings" ? "active" : ""}`}>
+            Settings
+          </Link>
+        </nav>
+        <span className="sidebar-spacer" />
+        <div className="sidebar-footer">
+          <span className="sidebar-email" title={user.email}>
+            {user.email}
+          </span>
+          <ThemeToggle />
+        </div>
+      </aside>
       <main className="content">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/instances/:id" element={<InstancePage />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+        <div className="content-inner">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/instances/:id" element={<InstancePage />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </div>
       </main>
     </div>
   );

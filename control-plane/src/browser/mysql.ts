@@ -1,18 +1,59 @@
 import mysql from "mysql2/promise";
-import type { BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
+import type { BrowseFilter, BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
 
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Safely backtick-quotes a MySQL identifier that isn't allowed to be parameterized. */
 export function quoteIdent(ident: string): string {
   if (!IDENT_RE.test(ident)) {
-    throw new Error(`invalid identifier: ${ident}`);
+    const err = new Error(`invalid identifier: ${ident}`);
+    (err as Error & { status?: number }).status = 400;
+    throw err;
   }
   return `\`${ident}\``;
 }
 
+const FILTER_OPS: Record<BrowseFilter["op"], string> = {
+  "=": "=",
+  "!=": "!=",
+  ">": ">",
+  "<": "<",
+  ">=": ">=",
+  "<=": "<=",
+  contains: "LIKE",
+};
+
+/** Builds a parameterized WHERE clause — values stay real bind params, never spliced into the query text. */
+function buildWhere(filters: BrowseFilter[] | undefined): { clause: string; params: unknown[] } {
+  if (!filters || filters.length === 0) return { clause: "", params: [] };
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  for (const f of filters) {
+    const sqlOp = FILTER_OPS[f.op];
+    if (!sqlOp) {
+      const err = new Error(`invalid filter operator: ${f.op}`);
+      (err as Error & { status?: number }).status = 400;
+      throw err;
+    }
+    parts.push(`${quoteIdent(f.column)} ${sqlOp} ?`);
+    params.push(f.op === "contains" ? `%${f.value}%` : f.value);
+  }
+  return { clause: `WHERE ${parts.join(" AND ")}`, params };
+}
+
 async function withConnection<T>(connectionString: string, fn: (conn: mysql.Connection) => Promise<T>): Promise<T> {
-  const conn = await mysql.createConnection({ uri: connectionString, connectTimeout: 8000 });
+  // mysql2's own URI parsing doesn't reliably turn a query-string ssl flag
+  // into a real TLS options object, so this "?ssl=true" marker (set by
+  // manifests/mysql.ts's tls.internalConnectionSuffix) is read here instead
+  // and passed as an explicit sibling option — rejectUnauthorized: false
+  // because the leaf cert is signed by the deployment's own self-signed CA,
+  // not a public one.
+  const useTls = /[?&]ssl=true(?:&|$)/.test(connectionString);
+  const conn = await mysql.createConnection({
+    uri: connectionString,
+    connectTimeout: 8000,
+    ssl: useTls ? { rejectUnauthorized: false } : undefined,
+  });
   try {
     return await fn(conn);
   } finally {
@@ -33,14 +74,15 @@ export const mysqlAdapter: BrowserAdapter = {
     });
   },
 
-  async browseObject(connectionString, ref, limit, offset): Promise<QueryResult> {
+  async browseObject(connectionString, ref, limit, offset, filters): Promise<QueryResult> {
     const table = quoteIdent(ref.name);
     const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 1000);
     const safeOffset = Math.max(Math.trunc(offset), 0);
+    const { clause, params } = buildWhere(filters);
     return withConnection(connectionString, async (conn) => {
       const [rows, fields] = await conn.query<mysql.RowDataPacket[]>(
-        `SELECT * FROM ${table} LIMIT ? OFFSET ?`,
-        [safeLimit, safeOffset]
+        `SELECT * FROM ${table} ${clause} LIMIT ? OFFSET ?`,
+        [...params, safeLimit, safeOffset]
       );
       return { columns: fields.map((f) => f.name), rows, rowCount: rows.length };
     });

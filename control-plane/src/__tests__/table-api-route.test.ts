@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // Docker-free by design, same reasoning as import-route.test.ts and
 // scoped-tokens.test.ts: the engine-allowlist check and requireWriteAccess
@@ -11,7 +11,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // in engines.integration.test.ts.
 const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
-const admin = new Client(server.baseUrl); // anonymous bootstrap mode — full access
+const admin = await setupSuperadmin(server);
 
 function fakeInstance(engine: string) {
   const row = {
@@ -32,6 +32,7 @@ function fakeInstance(engine: string) {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;

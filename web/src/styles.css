@@ -1,65 +1,80 @@
+/*
+ * Second pass, deliberately overriding the first: the warm-paper/serif-
+ * display look (cream background, Fraunces headings, soft wide shadows,
+ * generous radii) read as consumer/editorial, not the tight, neutral,
+ * information-dense look actual B2B SaaS dashboards (Linear, Vercel,
+ * Stripe's own dashboard, Supabase) share — cool neutral grays instead of
+ * a warm tint, one crisp sans in every weight instead of a second display
+ * face, small tight radii instead of soft-app-icon rounding, thin precise
+ * shadows instead of big soft glows. The amber "beacon" accent stays —
+ * it's the one piece of Wharf's identity worth keeping — but punched up
+ * to read as a precise signal color instead of a muted brown, and used
+ * sparingly (primary actions, active states) rather than as a color
+ * families cascading through soft glows and heroic bold clovertones.
+ */
 :root {
-  --bg: #f6f7f9;
+  --bg: #f7f8fa;
   --bg-raised: #ffffff;
   --panel: #ffffff;
-  --panel-2: #f0f2f5;
-  --border: #e3e6ec;
-  --text: #14161b;
-  --muted: #656e7d;
-  --accent: #1c7ed6;
+  --panel-2: #f1f3f6;
+  --border: #e1e4ea;
+  --text: #0f1524;
+  --muted: #66707e;
+  --accent: #d97706;
   --accent-contrast: #ffffff;
-  --danger: #d92b2b;
-  --danger-bg: rgba(217, 43, 43, 0.08);
-  --ok: #158f63;
-  --ok-bg: rgba(21, 143, 99, 0.1);
-  --warn: #b5750a;
-  --warn-bg: rgba(181, 117, 10, 0.12);
-  --shadow: 0 1px 2px rgba(20, 22, 27, 0.04), 0 8px 24px rgba(20, 22, 27, 0.06);
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --danger: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.08);
+  --ok: #0f9d78;
+  --ok-bg: rgba(15, 157, 120, 0.1);
+  --warn: #b45309;
+  --warn-bg: rgba(180, 83, 9, 0.1);
+  --shadow: 0 1px 2px rgba(15, 21, 36, 0.04), 0 2px 8px rgba(15, 21, 36, 0.05);
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --font-sans: "Inter", "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --font-display: var(--font-sans);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0a0c10;
-    --bg-raised: #12151c;
-    --panel: #12151c;
-    --panel-2: #191d26;
-    --border: #262b36;
-    --text: #edeff3;
-    --muted: #8b93a3;
-    --accent: #4fb3ff;
-    --accent-contrast: #06121f;
-    --danger: #ff6b6b;
-    --danger-bg: rgba(255, 107, 107, 0.12);
-    --ok: #3ddc9a;
-    --ok-bg: rgba(61, 220, 154, 0.12);
-    --warn: #f2b84b;
-    --warn-bg: rgba(242, 184, 75, 0.14);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+    --bg: #0a0e17;
+    --bg-raised: #12161f;
+    --panel: #12161f;
+    --panel-2: #171c28;
+    --border: #262c3a;
+    --text: #eef0f4;
+    --muted: #8a92a3;
+    --accent: #f0a030;
+    --accent-contrast: #14100a;
+    --danger: #f0685a;
+    --danger-bg: rgba(240, 104, 90, 0.14);
+    --ok: #33c493;
+    --ok-bg: rgba(51, 196, 147, 0.14);
+    --warn: #e0a53d;
+    --warn-bg: rgba(224, 165, 61, 0.14);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.3);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0a0c10;
-  --bg-raised: #12151c;
-  --panel: #12151c;
-  --panel-2: #191d26;
-  --border: #262b36;
-  --text: #edeff3;
-  --muted: #8b93a3;
-  --accent: #4fb3ff;
-  --accent-contrast: #06121f;
-  --danger: #ff6b6b;
-  --danger-bg: rgba(255, 107, 107, 0.12);
-  --ok: #3ddc9a;
-  --ok-bg: rgba(61, 220, 154, 0.12);
-  --warn: #f2b84b;
-  --warn-bg: rgba(242, 184, 75, 0.14);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --bg: #0a0e17;
+  --bg-raised: #12161f;
+  --panel: #12161f;
+  --panel-2: #171c28;
+  --border: #262c3a;
+  --text: #eef0f4;
+  --muted: #8a92a3;
+  --accent: #f0a030;
+  --accent-contrast: #14100a;
+  --danger: #f0685a;
+  --danger-bg: rgba(240, 104, 90, 0.14);
+  --ok: #33c493;
+  --ok-bg: rgba(51, 196, 147, 0.14);
+  --warn: #e0a53d;
+  --warn-bg: rgba(224, 165, 61, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -78,49 +93,110 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 0 24px 80px;
+/*
+ * A persistent sidebar, not a scrolling topbar — this is the single biggest
+ * lever for reading as a real product (Atlas/Supabase-shaped) instead of a
+ * form wrapped in a page. Two fixed-position columns rather than one
+ * scrolling document: the sidebar's nav/account controls stay put while
+ * .content scrolls on its own, same as every dashboard this is patterned
+ * after. Deliberately just two nav destinations (Databases, Settings) —
+ * this product doesn't have more top-level sections to hang on it, and
+ * adding chrome for navigation that doesn't exist would be exactly the
+ * complexity the "not that complex for people" brief was warning against.
+ */
+.app-shell {
+  display: flex;
   min-height: 100vh;
 }
 
-.topbar {
+.sidebar {
+  width: 220px;
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 32px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 16px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-raised);
   position: sticky;
   top: 0;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(8px);
-  z-index: 10;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 17px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
   color: var(--text);
   text-decoration: none;
   letter-spacing: -0.01em;
+  padding: 0 8px;
+  margin-bottom: 22px;
 }
 
 .brand svg {
   color: var(--accent);
 }
 
-.tagline {
-  color: var(--muted);
-  font-size: 13px;
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.topbar-spacer {
+.sidebar-link {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.sidebar-link:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.sidebar-link.active {
+  background: var(--panel-2);
+  color: var(--accent);
+}
+
+.sidebar-spacer {
   flex: 1;
+}
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.sidebar-email {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 32px 80px;
+}
+
+.content-inner {
+  max-width: 1040px;
 }
 
 .theme-toggle {
@@ -134,40 +210,163 @@ body {
   justify-content: center;
   font-size: 15px;
   padding: 0;
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 16px;
+    overflow-y: visible;
+  }
+
+  .brand {
+    margin-bottom: 0;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+  }
+
+  .sidebar-spacer {
+    display: none;
+  }
+
+  .sidebar-footer {
+    border-top: none;
+    padding: 0;
+  }
+
+  .sidebar-email {
+    display: none;
+  }
+
+  .content {
+    padding: 20px 16px 60px;
+  }
 }
 
 h1,
 h2,
 h3 {
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   margin: 0 0 4px;
 }
 
 h2 {
-  font-size: 15px;
+  font-size: 13px;
   color: var(--text);
   margin-bottom: 14px;
 }
 
 .hero {
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 
 .hero h1 {
-  font-size: 28px;
-  margin-bottom: 6px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
 }
 
 .hero p {
   color: var(--muted);
-  font-size: 15px;
+  font-size: 14px;
   margin: 0;
   max-width: 560px;
 }
 
 .section {
   margin-bottom: 36px;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.create-mode-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/*
+ * A real toggle switch, not the bare OS checkbox every browser renders by
+ * default — every use of .checkbox-row in this app is a boolean on/off
+ * setting (TLS default), which is exactly what a switch communicates at a
+ * glance and a plain checkbox doesn't. Still a real <input type="checkbox">
+ * underneath (same markup, same keyboard/accessibility behavior) — only
+ * the paint is different, via appearance: none plus a positioned thumb.
+ */
+.checkbox-row input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.checkbox-row input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 21, 36, 0.3);
+  transition: transform 0.15s ease;
+}
+
+.checkbox-row input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.checkbox-row input[type="checkbox"]:checked::before {
+  transform: translateX(12px);
+}
+
+.checkbox-row input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.engine-no-tls {
+  color: var(--muted);
+  opacity: 0.8;
 }
 
 .engine-cards {
@@ -180,30 +379,41 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 3px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px 20px;
+  padding: 14px 16px;
   cursor: pointer;
   color: var(--text);
-  min-width: 170px;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  min-width: 160px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .engine-card:hover:not(:disabled) {
   border-color: var(--accent);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow);
 }
 
 .engine-card:disabled {
   opacity: 0.55;
   cursor: default;
-  transform: none;
+}
+
+.engine-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--muted);
+  margin-bottom: 6px;
 }
 
 .engine-name {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 650;
 }
 
@@ -350,8 +560,11 @@ h2 {
 }
 
 .instance-header h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0 0 4px;
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .sub {
@@ -376,17 +589,19 @@ h2 {
 
 button {
   font: inherit;
+  font-weight: 500;
+  font-size: 13px;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 14px;
+  padding: 7px 12px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+  transition: border-color 0.12s ease, background 0.12s ease, opacity 0.12s ease;
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--muted);
 }
 
 button:disabled {
@@ -428,20 +643,65 @@ button.ghost {
   border-color: transparent;
 }
 
+/*
+ * A real underline tab bar, not two bordered buttons sitting above a
+ * divider — the active tab's underline sits flush against the bar's own
+ * border so it reads as one continuous control, the same shape every
+ * editor-like product (an IDE's panel tabs, a spreadsheet's sheet tabs)
+ * uses. .tabs-sub is the same idea at a smaller scale, for the Advanced
+ * view's own internal sections (Overview/Backups/Access/Activity/Logs) —
+ * splitting what used to be seven panels stacked in one long scroll into
+ * real navigation instead of more scrolling.
+ */
 .tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 4px;
+  margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 12px;
+}
+
+.tabs button {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 4px;
+  margin-right: 22px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.tabs button:hover:not(:disabled) {
+  border-color: transparent;
+  color: var(--text);
+}
+
+.tabs button.active {
+  background: transparent;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 650;
+}
+
+.tabs-sub {
+  margin-bottom: 20px;
+}
+
+.tabs-sub button {
+  font-size: 13px;
+  padding: 8px 2px;
+  margin-right: 18px;
 }
 
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 22px;
-  margin-bottom: 20px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
   box-shadow: var(--shadow);
 }
 
@@ -554,11 +814,27 @@ button.ghost {
   right: 8px;
 }
 
+/*
+ * The Data tab's own dedicated workspace, not another .panel card stacked
+ * among others — this is the whole content of the tab, so it gets the
+ * room a real data-browsing tool needs (a taller object list, a taller
+ * row table) rather than being squeezed under Connect/Ask the way it used
+ * to be when all three shared one Simple-view column.
+ */
+.browse-workspace {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
 .browse-layout {
   display: grid;
-  grid-template-columns: 190px 1fr;
+  grid-template-columns: 220px 1fr;
   gap: 16px;
   margin-bottom: 20px;
+  align-items: start;
 }
 
 @media (max-width: 720px) {
@@ -582,20 +858,27 @@ button.ghost {
 
 .import-row {
   display: flex;
+  flex-direction: column;
   gap: 6px;
   margin-bottom: 10px;
 }
 
 .import-target {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
   font-size: 12px;
-  padding: 5px 8px;
+  padding: 6px 9px;
 }
 
 .import-button {
+  width: 100%;
+  text-align: center;
   font-size: 12px;
-  padding: 5px 10px;
+  padding: 6px 10px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -616,7 +899,7 @@ button.ghost {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  max-height: 340px;
+  max-height: 60vh;
   overflow-y: auto;
 }
 
@@ -633,10 +916,156 @@ button.ghost {
   background: var(--panel-2);
 }
 
+/*
+ * Needs to out-rank .object-list button's own transparent background at
+ * equal specificity (found for real: without this, the two rules tie and
+ * whichever comes later in the file wins, which made the selected table
+ * name render in button.active's dark accent-contrast text color against
+ * a transparent — effectively still-dark — background, nearly invisible).
+ */
+.object-list button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.object-list button.active .count {
+  color: var(--accent-contrast);
+  opacity: 0.75;
+}
+
 .count {
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.filter-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.filter-row select,
+.filter-row input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.filter-row select:first-child {
+  flex: 0 0 auto;
+  min-width: 100px;
+}
+
+.filter-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-remove {
+  border-color: transparent;
+  color: var(--muted);
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.filter-remove:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: transparent;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-actions button {
+  font-size: 12.5px;
+  padding: 5px 10px;
+}
+
+.edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.id-column-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.id-column-picker select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.edit-toolbar > button {
+  font-size: 12.5px;
+  padding: 5px 10px;
+}
+
+.editable-table .row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.editable-table .row-actions button {
+  font-size: 12px;
+  padding: 4px 9px;
+  margin-left: 4px;
+}
+
+.editable-table tbody input {
+  width: 100%;
+  min-width: 80px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+}
+
+.editable-table tbody input:disabled {
+  opacity: 0.5;
+}
+
+.editable-table tr.editing-row {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
 }
 
 .export-row {
@@ -653,7 +1082,7 @@ button.ghost {
 
 .table-scroll {
   overflow-x: auto;
-  max-height: 380px;
+  max-height: 60vh;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -673,8 +1102,32 @@ button.ghost {
   white-space: nowrap;
 }
 
+.result-table tbody tr:nth-child(even):not(.editing-row) {
+  background: color-mix(in srgb, var(--panel-2) 45%, transparent);
+}
+
 .result-table tbody tr:hover {
   background: var(--panel-2);
+}
+
+.row-count-badge {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tls-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .result-table th {
@@ -692,17 +1145,139 @@ button.ghost {
   border-top: 1px solid var(--border);
 }
 
-.query-runner textarea {
-  width: 100%;
-  background: var(--panel-2);
-  color: var(--text);
+.query-runner h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/*
+ * A real editor chrome around the query textarea — a line-number gutter
+ * that scrolls in lockstep with the text, not just a bare <textarea> —
+ * since a plain text box is exactly the "form-like" feeling this pass is
+ * fixing. The gutter is a second scrollable element kept in sync via JS
+ * (InstancePage.tsx's onScroll handler), so both need identical
+ * line-height/font/padding-top or they drift apart by a pixel a line.
+ */
+.query-editor {
+  display: flex;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.query-editor:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.query-editor-gutter {
+  flex: none;
+  width: 38px;
+  padding: 11px 0;
+  text-align: right;
+  background: color-mix(in srgb, var(--panel-2) 60%, var(--bg));
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+  user-select: none;
+}
+
+.query-editor-gutter span {
+  display: block;
+  padding-right: 8px;
+}
+
+.query-editor textarea {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--text);
+  border: none;
   padding: 11px;
   font-family: var(--font-mono);
   font-size: 13px;
-  margin-bottom: 10px;
+  line-height: 1.5;
   resize: vertical;
+}
+
+.query-editor textarea:focus {
+  outline: none;
+}
+
+.query-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  position: relative;
+}
+
+.query-toolbar .kbd-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.query-toolbar kbd {
+  font-family: var(--font-mono);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+}
+
+.query-history {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 6px;
+}
+
+.query-history button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-history button:hover {
+  background: var(--panel-2);
+  border-color: transparent;
+}
+
+.query-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  margin: 10px 0 4px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ask-row,
@@ -829,6 +1404,19 @@ input:focus-visible {
   gap: 14px;
 }
 
+/* Dashboard's compact summary strip — same tile look as the instance
+   page's Metrics grid, but a flex row of fixed-width tiles rather than a
+   stretching grid, since three numbers don't need to fill the page width. */
+.stats-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.stats-row .metric {
+  min-width: 110px;
+}
+
 .metric {
   display: flex;
   flex-direction: column;
@@ -936,6 +1524,7 @@ input:focus-visible {
   box-shadow: var(--shadow);
   animation: toast-in 0.18s ease;
   max-width: 340px;
+  cursor: pointer;
 }
 
 @keyframes toast-in {
@@ -1001,12 +1590,6 @@ input:focus-visible {
   margin-top: 20px;
 }
 
-.topbar-email {
-  color: var(--muted);
-  font-size: 13px;
-  margin-right: 4px;
-}
-
 .auth-screen {
   min-height: 100vh;
   display: flex;
@@ -1029,14 +1612,19 @@ input:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 17px;
-  color: var(--accent);
+  letter-spacing: -0.01em;
+  color: var(--text);
   margin-bottom: 20px;
 }
 
 .auth-card h1 {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-size: 19px;
   margin-bottom: 4px;
 }
 
@@ -1079,6 +1667,65 @@ input:focus-visible {
   margin-top: 14px;
   text-align: center;
   color: var(--muted);
+}
+
+.auth-card form select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 14px;
+}
+
+.auth-card form label.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.setup-steps {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.setup-step {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 2px solid transparent;
+}
+
+.setup-step.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.setup-step.done {
+  color: var(--text);
+}
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin-bottom: 14px;
+  max-width: 360px;
 }
 
 .model-filter {

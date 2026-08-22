@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   default_model TEXT,
+  is_superadmin INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -84,6 +85,19 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail TEXT,
   created_at TEXT NOT NULL
 );
+
+-- Singleton row (id always "default") holding deployment-wide config set by
+-- the first-boot setup wizard and editable afterward from Settings by a
+-- superadmin. WHARF_PUBLIC_HOST remains an absolute env-var override on top
+-- of public_host, for existing docker-compose deployments that already set
+-- it — see settings.ts.
+CREATE TABLE IF NOT EXISTS deployment_settings (
+  id TEXT PRIMARY KEY,
+  public_host TEXT,
+  host_kind TEXT NOT NULL DEFAULT 'ip',
+  default_tls INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
 `);
 
 // owner_id was added after instances first shipped — add it for anyone
@@ -93,11 +107,35 @@ if (!instanceColumns.some((c) => c.name === "owner_id")) {
   db.exec(`ALTER TABLE instances ADD COLUMN owner_id TEXT`);
 }
 
+// is_superadmin was added after users first shipped — same reasoning as
+// owner_id above, so an existing self-hosted install's first-ever account
+// (which predates the mandatory first-boot setup flow) doesn't silently
+// become un-promotable to superadmin.
+const userColumns = db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[];
+if (!userColumns.some((c) => c.name === "is_superadmin")) {
+  db.exec(`ALTER TABLE users ADD COLUMN is_superadmin INTEGER NOT NULL DEFAULT 0`);
+  // An install upgrading from before this column existed may already have
+  // accounts with no superadmin among them — granting superadmin requires
+  // already being superadmin, so without this, upgrading would strand
+  // everyone with no way to reach the new management surface at all.
+  // Promote whoever signed up first, same as a fresh install's first signup.
+  db.exec(`UPDATE users SET is_superadmin = 1 WHERE id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)`);
+}
+
+// tls_enabled was added after instances first shipped — same upgrade
+// reasoning as owner_id/is_superadmin above. Existing instances predate TLS
+// entirely and were provisioned without it, so they default to off.
+const tlsColumns = db.prepare(`PRAGMA table_info(instances)`).all() as { name: string }[];
+if (!tlsColumns.some((c) => c.name === "tls_enabled")) {
+  db.exec(`ALTER TABLE instances ADD COLUMN tls_enabled INTEGER NOT NULL DEFAULT 0`);
+}
+
 export interface UserRow {
   id: string;
   email: string;
   password_hash: string;
   default_model: string | null;
+  is_superadmin: number;
   created_at: string;
 }
 
@@ -126,6 +164,7 @@ export interface InstanceRow {
   disk_gb: number;
   created_at: string;
   error: string | null;
+  tls_enabled: number;
 }
 
 export interface BackupRow {
@@ -162,11 +201,19 @@ export interface AuditLogRow {
   created_at: string;
 }
 
+export interface DeploymentSettingsRow {
+  id: string;
+  public_host: string | null;
+  host_kind: "ip" | "domain";
+  default_tls: number;
+  updated_at: string;
+}
+
 export const usersRepo = {
   insert(row: UserRow) {
     db.prepare(
-      `INSERT INTO users (id, email, password_hash, default_model, created_at)
-       VALUES (@id, @email, @password_hash, @default_model, @created_at)`
+      `INSERT INTO users (id, email, password_hash, default_model, is_superadmin, created_at)
+       VALUES (@id, @email, @password_hash, @default_model, @is_superadmin, @created_at)`
     ).run(row);
   },
   getById(id: string): UserRow | undefined {
@@ -180,6 +227,19 @@ export const usersRepo = {
     if (fields.length === 0) return;
     const setClause = fields.map((f) => `${f} = @${f}`).join(", ");
     db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...patch, id });
+  },
+  /** Every account — the admin user-management panel is the only caller. */
+  list(): UserRow[] {
+    return db.prepare(`SELECT * FROM users ORDER BY created_at ASC`).all() as UserRow[];
+  },
+  remove(id: string) {
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(id);
+  },
+  count(): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }).n;
+  },
+  countSuperadmins(): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM users WHERE is_superadmin = 1`).get() as { n: number }).n;
   },
 };
 
@@ -196,6 +256,10 @@ export const sessionsRepo = {
   removeExpired() {
     db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(new Date().toISOString());
   },
+  /** Used when an admin deletes a user's account — signs out any session they still hold. */
+  removeForUser(userId: string) {
+    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+  },
 };
 
 export const instancesRepo = {
@@ -203,9 +267,9 @@ export const instancesRepo = {
     db.prepare(
       `INSERT INTO instances
         (id, owner_id, name, engine, version, status, container_id, volume_name, host_port,
-         username, password, database_name, cpu, memory_mb, disk_gb, created_at, error)
+         username, password, database_name, cpu, memory_mb, disk_gb, created_at, error, tls_enabled)
        VALUES (@id, @owner_id, @name, @engine, @version, @status, @container_id, @volume_name, @host_port,
-         @username, @password, @database_name, @cpu, @memory_mb, @disk_gb, @created_at, @error)`
+         @username, @password, @database_name, @cpu, @memory_mb, @disk_gb, @created_at, @error, @tls_enabled)`
     ).run(row);
   },
   update(id: string, patch: Partial<InstanceRow>) {
@@ -226,6 +290,17 @@ export const instancesRepo = {
     return db
       .prepare(`SELECT * FROM instances WHERE owner_id = ? OR owner_id IS NULL ORDER BY created_at DESC`)
       .all(ownerId) as InstanceRow[];
+  },
+  /**
+   * Exactly this owner's instances — unlike listForOwner, does NOT also
+   * include ownerless ones. Used only by admin user-deletion, to reassign
+   * (not display) what a removed account leaves behind.
+   */
+  listOwnedBy(ownerId: string): InstanceRow[] {
+    return db.prepare(`SELECT * FROM instances WHERE owner_id = ?`).all(ownerId) as InstanceRow[];
+  },
+  countOwnedBy(ownerId: string): number {
+    return (db.prepare(`SELECT COUNT(*) AS n FROM instances WHERE owner_id = ?`).get(ownerId) as { n: number }).n;
   },
   remove(id: string) {
     db.prepare(`DELETE FROM instances WHERE id = ?`).run(id);
@@ -315,5 +390,35 @@ export const auditLogRepo = {
     return db
       .prepare(`SELECT * FROM audit_log WHERE instance_id = ? ORDER BY created_at DESC LIMIT ?`)
       .all(instanceId, limit) as AuditLogRow[];
+  },
+};
+
+const DEPLOYMENT_SETTINGS_ID = "default";
+
+export const deploymentSettingsRepo = {
+  get(): DeploymentSettingsRow | undefined {
+    return db.prepare(`SELECT * FROM deployment_settings WHERE id = ?`).get(DEPLOYMENT_SETTINGS_ID) as
+      | DeploymentSettingsRow
+      | undefined;
+  },
+  upsert(patch: { public_host?: string | null; host_kind?: "ip" | "domain"; default_tls?: number }): DeploymentSettingsRow {
+    const existing = deploymentSettingsRepo.get();
+    const row: DeploymentSettingsRow = {
+      id: DEPLOYMENT_SETTINGS_ID,
+      public_host: patch.public_host !== undefined ? patch.public_host : (existing?.public_host ?? null),
+      host_kind: patch.host_kind !== undefined ? patch.host_kind : (existing?.host_kind ?? "ip"),
+      default_tls: patch.default_tls !== undefined ? patch.default_tls : (existing?.default_tls ?? 0),
+      updated_at: new Date().toISOString(),
+    };
+    db.prepare(
+      `INSERT INTO deployment_settings (id, public_host, host_kind, default_tls, updated_at)
+       VALUES (@id, @public_host, @host_kind, @default_tls, @updated_at)
+       ON CONFLICT(id) DO UPDATE SET
+         public_host = excluded.public_host,
+         host_kind = excluded.host_kind,
+         default_tls = excluded.default_tls,
+         updated_at = excluded.updated_at`
+    ).run(row);
+    return row;
   },
 };

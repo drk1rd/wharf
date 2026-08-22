@@ -3,7 +3,7 @@ import { api, type User } from "../lib/api";
 
 interface AuthState {
   loading: boolean;
-  authRequired: boolean;
+  needsSetup: boolean;
   user: User | null;
   refresh: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -20,18 +20,18 @@ export function useAuth(): AuthState {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [authRequired, setAuthRequired] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
+  // There's no anonymous-access bootstrap window anymore — every path
+  // through this needs either a real session (checked below) or, before
+  // one exists, needsSetup routes the app to the superadmin setup screen
+  // instead (see App.tsx's Shell).
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       const config = await api.getConfig();
-      setAuthRequired(config.authRequired);
-      if (!config.authRequired) {
-        setUser(null);
-        return;
-      }
+      setNeedsSetup(config.needsSetup);
       try {
         setUser(await api.me());
       } catch {
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ loading, authRequired, user, refresh, setUser, logout }}>
+    <AuthContext.Provider value={{ loading, needsSetup, user, refresh, setUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

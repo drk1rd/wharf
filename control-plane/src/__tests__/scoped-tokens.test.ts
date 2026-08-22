@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // Docker-free by design: everything here either short-circuits before
 // touching a real container (requireWriteAccess throws first for a
@@ -10,7 +10,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // docker.ts), same reasoning as import-route.test.ts and ownership.test.ts.
 const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
-const admin = new Client(server.baseUrl); // anonymous bootstrap mode — full access, same as ownership.test.ts's pattern
+const admin = await setupSuperadmin(server); // the first account on this server — always the superadmin
 
 function fakeInstance(name: string) {
   const row = {
@@ -31,6 +31,7 @@ function fakeInstance(name: string) {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;

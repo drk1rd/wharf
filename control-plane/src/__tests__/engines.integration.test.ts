@@ -1,8 +1,6 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { startTestServer, Client, dockerAvailable } from "../testing/harness.js";
-import { runDueBackups } from "../backups.js";
-import { instancesRepo } from "../db.js";
+import { startTestServer, setupSuperadmin, dockerAvailable } from "../testing/harness.js";
 
 // These are the only tests in the suite that touch a real Docker daemon and
 // pull real images. They're written to run for real in CI (GitHub-hosted
@@ -14,7 +12,18 @@ const available = await dockerAvailable();
 const skip = available ? false : "no reachable Docker daemon — this is expected in network-restricted sandboxes, not in CI";
 
 const server = await startTestServer();
-const client = new Client(server.baseUrl);
+const client = await setupSuperadmin(server);
+// Dynamic, not static — same reasoning as harness.ts's own comment: db.js
+// (and backups.js, which imports it) read WHARF_DATA_DIR at module-load
+// time. A static import at the top of this file would be hoisted and
+// evaluated before startTestServer() above ever sets that env var, silently
+// binding to the real persistent control-plane/data/ dir instead of this
+// run's isolated temp one — which is exactly what happened here before this
+// comment existed (found for real: a second local run of this file 409'd
+// creating its superadmin account, because the first run's had persisted
+// to the real, un-isolated data directory).
+const { runDueBackups } = await import("../backups.js");
+const { instancesRepo } = await import("../db.js");
 
 async function waitForStatus(id: string, timeoutMs = 120_000): Promise<any> {
   const deadline = Date.now() + timeoutMs;
@@ -112,6 +121,41 @@ test("postgres: create, connect, browse, query, backup", { skip, timeout: 240_00
 
   const apiListAfter = await client.get(`/api/instances/${instance.id}/api/customers`);
   assert.equal(apiListAfter.body.rowCount, 4, "back to 4 after the API-inserted row was deleted");
+
+  // Data browser filter builder: real WHERE clauses against real data,
+  // covering a comparison op, a substring ("contains") op, and AND-combined
+  // multiple filters — the three shapes the frontend filter builder emits.
+  function filteredRows(filters: unknown) {
+    return client.get(
+      `/api/instances/${instance.id}/browse/objects/customers/rows?filters=${encodeURIComponent(JSON.stringify(filters))}`
+    );
+  }
+
+  const containsFilter = await filteredRows([{ column: "email", op: "contains", value: "ada" }]);
+  assert.equal(containsFilter.status, 200);
+  assert.equal(containsFilter.body.rows.length, 1);
+  assert.equal(containsFilter.body.rows[0].email, "ada@example.com");
+
+  const equalsFilter = await filteredRows([{ column: "name", op: "=", value: "Grace Hopper" }]);
+  assert.equal(equalsFilter.body.rows.length, 1);
+  assert.equal(equalsFilter.body.rows[0].name, "Grace Hopper");
+
+  const noMatchFilter = await filteredRows([{ column: "email", op: "=", value: "nobody@example.com" }]);
+  assert.equal(noMatchFilter.body.rows.length, 0);
+
+  // AND-combined: both conditions must hold — a name that matches but an
+  // email that doesn't should exclude the row.
+  const combinedNoMatch = await filteredRows([
+    { column: "name", op: "=", value: "Grace Hopper" },
+    { column: "email", op: "contains", value: "ada" },
+  ]);
+  assert.equal(combinedNoMatch.body.rows.length, 0);
+
+  const combinedMatch = await filteredRows([
+    { column: "name", op: "=", value: "Grace Hopper" },
+    { column: "email", op: "contains", value: "grace" },
+  ]);
+  assert.equal(combinedMatch.body.rows.length, 1);
 
   const query = await client.post(`/api/instances/${instance.id}/browse/query`, { query: "SELECT 1 AS one" });
   assert.equal(query.status, 200);
@@ -313,6 +357,51 @@ test("clickhouse: create, connect, browse, query, backup and restore round-trip"
   assert.equal(afterRestore.body.rows[0].name, "first");
 
   await client.delete(`/api/instances/${instance.id}`);
+});
+
+test("TLS: postgres/mysql/mongodb provision, are queryable, and hand out a TLS-flagged connection string", { skip, timeout: 240_000 }, async () => {
+  const ca = await client.get("/api/tls/ca-certificate");
+  assert.equal(ca.status, 200);
+  assert.ok(String(ca.body).includes("BEGIN CERTIFICATE"), "CA endpoint should return a PEM certificate");
+
+  const pg = await client.post("/api/instances", { engine: "postgres", tls: true });
+  assert.equal(pg.status, 201);
+  const pgSettled = await waitForStatus(pg.body.id);
+  assert.equal(pgSettled.status, "running", `TLS postgres should reach running (error: ${pgSettled.error})`);
+  assert.equal(pgSettled.tlsEnabled, true);
+  assert.ok(pgSettled.connection.connectionString.includes("sslmode=require"), pgSettled.connection.connectionString);
+  const pgQuery = await client.post(`/api/instances/${pg.body.id}/browse/query`, { query: "SELECT 1 AS one" });
+  assert.equal(pgQuery.status, 200, JSON.stringify(pgQuery.body));
+  assert.equal(Number(pgQuery.body.rows[0].one), 1);
+  await client.delete(`/api/instances/${pg.body.id}`);
+
+  const mysqlRes = await client.post("/api/instances", { engine: "mysql", tls: true });
+  assert.equal(mysqlRes.status, 201);
+  const mysqlSettled = await waitForStatus(mysqlRes.body.id);
+  assert.equal(mysqlSettled.status, "running", `TLS mysql should reach running (error: ${mysqlSettled.error})`);
+  assert.ok(mysqlSettled.connection.connectionString.includes("ssl=true"), mysqlSettled.connection.connectionString);
+  const mysqlQuery = await client.post(`/api/instances/${mysqlRes.body.id}/browse/query`, { query: "SELECT 1 AS one" });
+  assert.equal(mysqlQuery.status, 200, JSON.stringify(mysqlQuery.body));
+  assert.equal(Number(mysqlQuery.body.rows[0].one), 1);
+  await client.delete(`/api/instances/${mysqlRes.body.id}`);
+
+  const mongoRes = await client.post("/api/instances", { engine: "mongodb", tls: true });
+  assert.equal(mongoRes.status, 201);
+  const mongoSettled = await waitForStatus(mongoRes.body.id);
+  assert.equal(mongoSettled.status, "running", `TLS mongodb should reach running (error: ${mongoSettled.error})`);
+  assert.ok(mongoSettled.connection.connectionString.includes("tls=true"), mongoSettled.connection.connectionString);
+  const mongoObjects = await client.get(`/api/instances/${mongoRes.body.id}/browse/objects`);
+  assert.equal(mongoObjects.status, 200, JSON.stringify(mongoObjects.body));
+  await client.delete(`/api/instances/${mongoRes.body.id}`);
+});
+
+test("TLS: an engine with no manifest.tls (redis) silently ignores tls: true rather than failing", { skip, timeout: 150_000 }, async () => {
+  const created = await client.post("/api/instances", { engine: "redis", tls: true });
+  assert.equal(created.status, 201);
+  const instance = await waitForStatus(created.body.id);
+  assert.equal(instance.status, "running");
+  assert.equal(instance.tlsEnabled, false, "redis has no tls support yet — the request is honored as a no-op, not an error");
+  await client.delete(`/api/instances/${created.body.id}`);
 });
 
 after(() => server.close());

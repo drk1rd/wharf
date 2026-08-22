@@ -6,46 +6,37 @@ import { createInstanceContainer, stopAndRemoveContainer, updateContainerResourc
 import { canAccessInstance, type AuthContext } from "./auth.js";
 import { getBrowserAdapter } from "./browser/registry.js";
 import { createBackup, deleteBackupsForInstance, restoreBackupInto } from "./backups.js";
+import { defaultTlsEnabled, probeHost, publicHost } from "./settings.js";
+import { issueLeafCert } from "./tls.js";
 
-// The host used in connection strings handed to users/clients — wherever the
-// docker daemon's published ports are actually reachable from (typically the
-// machine running `docker compose up`).
-const PUBLIC_HOST = process.env.WHARF_PUBLIC_HOST ?? "localhost";
-
-// The host the control plane itself uses to probe a freshly-created instance
-// for readiness. When the control plane runs inside its own container (the
-// self-host docker-compose setup) it can't reach sibling containers' published
-// ports via "localhost" — it needs the docker host gateway instead. Defaults
-// to PUBLIC_HOST for the common "control plane runs on bare metal/dev machine"
-// case, where they're the same thing.
-const PROBE_HOST = process.env.WHARF_PROBE_HOST ?? PUBLIC_HOST;
-
+/** The host used in connection strings handed to users/clients. Call-time-read (not frozen) so a setup-wizard or Settings change takes effect immediately — see settings.ts. */
 export function instanceHost(): string {
-  return PUBLIC_HOST;
+  return publicHost();
 }
 
 export function connectionInfo(row: InstanceRow): { host: string; port: number; connectionString: string } | null {
   const manifest = getManifest(row.engine);
   if (!manifest || !row.host_port || !row.username || !row.password || !row.database_name) return null;
   const secrets: InstanceSecrets = { username: row.username, password: row.password, database: row.database_name };
-  return {
-    host: PUBLIC_HOST,
-    port: row.host_port,
-    connectionString: manifest.connectionString(secrets, PUBLIC_HOST, row.host_port),
-  };
+  const host = publicHost();
+  const base = manifest.connectionString(secrets, host, row.host_port);
+  const suffix = row.tls_enabled && manifest.tls ? manifest.tls.externalConnectionSuffix() : "";
+  return { host, port: row.host_port, connectionString: base + suffix };
 }
 
 /**
- * Connection string built with PROBE_HOST instead of PUBLIC_HOST — for the
- * control plane's own outbound queries (the data browser), which need to
- * reach the instance the same way the readiness probe does, not the way an
- * end user's browser/CLI does.
+ * Connection string built with the probe host instead of the public host —
+ * for the control plane's own outbound queries (the data browser), which
+ * need to reach the instance the same way the readiness probe does, not the
+ * way an end user's browser/CLI does.
  */
 export function internalConnectionString(row: InstanceRow): string | null {
   const manifest = getManifest(row.engine);
   if (!manifest || !row.host_port || !row.username || !row.password || !row.database_name) return null;
   const secrets: InstanceSecrets = { username: row.username, password: row.password, database: row.database_name };
-  return manifest.connectionString(secrets, PROBE_HOST, row.host_port);
+  const base = manifest.connectionString(secrets, probeHost(), row.host_port);
+  const suffix = row.tls_enabled && manifest.tls ? manifest.tls.internalConnectionSuffix() : "";
+  return base + suffix;
 }
 
 // Protects a shared host (e.g. a small pilot everyone points at) from one
@@ -103,7 +94,7 @@ export async function createInstance(
   engine: string,
   ownerId: string | null,
   version?: string,
-  opts: { seed?: boolean } = {}
+  opts: { seed?: boolean; tls?: boolean } = {}
 ): Promise<InstanceRow> {
   if (MAX_INSTANCES > 0 && instancesRepo.list().length >= MAX_INSTANCES) {
     const err = new Error(`this Wharf instance is at its limit of ${MAX_INSTANCES} databases — delete one before creating another`);
@@ -116,6 +107,15 @@ export async function createInstance(
   const resolvedVersion = version && manifest.versions.includes(version) ? version : manifest.defaultVersion;
 
   assertWithinResourceBudget(parseFloat(manifest.resourceDefaults.cpu), manifest.resourceDefaults.memoryMb);
+
+  // TLS is a create-time-only choice, same honesty as disk not being
+  // live-resizable — turning it on or off later needs new certs mounted in
+  // and the engine restarted with different flags, not a live toggle. Falls
+  // back to the deployment default when the caller doesn't specify, and is
+  // silently unavailable for engines with no manifest.tls (Redis, ClickHouse)
+  // even if the deployment default is on, rather than erroring.
+  const wantsTls = opts.tls ?? defaultTlsEnabled();
+  const tlsEnabled = wantsTls && Boolean(manifest.tls);
 
   const id = randomUUID();
   const secrets = manifest.makeSecrets(id);
@@ -137,11 +137,12 @@ export async function createInstance(
     disk_gb: manifest.resourceDefaults.diskGb,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: tlsEnabled ? 1 : 0,
   };
   instancesRepo.insert(row);
 
   // Provision in the background — the client polls GET /api/instances/:id for status.
-  void provision(id, manifest, resolvedVersion, secrets, opts.seed ?? true);
+  void provision(id, manifest, resolvedVersion, secrets, opts.seed ?? true, tlsEnabled);
 
   return row;
 }
@@ -176,20 +177,40 @@ async function waitForAdapterReady(
   throw lastErr instanceof Error ? lastErr : new Error("engine did not become query-ready in time");
 }
 
-async function provision(id: string, manifest: ServiceManifest, version: string, secrets: InstanceSecrets, seed: boolean): Promise<void> {
+async function provision(
+  id: string,
+  manifest: ServiceManifest,
+  version: string,
+  secrets: InstanceSecrets,
+  seed: boolean,
+  tlsEnabled: boolean
+): Promise<void> {
   try {
+    // Signed against the public host, not the probe host — the leaf cert's
+    // CN/SAN needs to match the address clients actually connect to
+    // (browser/CLI), and localhost/127.0.0.1 are always included as
+    // additional SANs, which covers the probe host in the common case where
+    // it differs (host.docker.internal-style self-host setups still resolve
+    // to a loopback path, and no client validates the probe host itself —
+    // only the control plane's own internal connections do, which use
+    // internalConnectionSuffix's no-verify/insecure mode instead of hostname
+    // checking).
+    const tlsCert = tlsEnabled && manifest.tls ? issueLeafCert(publicHost()) : undefined;
+
     const { containerId, volumeName, hostPort } = await createInstanceContainer({
       instanceId: id,
       manifest,
       version,
       secrets,
+      tlsCert,
     });
     instancesRepo.update(id, { container_id: containerId, volume_name: volumeName, host_port: hostPort });
 
-    const tcpReady = await waitForPort(PROBE_HOST, hostPort);
+    const tcpReady = await waitForPort(probeHost(), hostPort);
     if (!tcpReady) throw new Error("engine did not become reachable in time");
 
-    const connectionString = manifest.connectionString(secrets, PROBE_HOST, hostPort);
+    const suffix = tlsEnabled && manifest.tls ? manifest.tls.internalConnectionSuffix() : "";
+    const connectionString = manifest.connectionString(secrets, probeHost(), hostPort) + suffix;
     await waitForAdapterReady(manifest.browserAdapter, connectionString);
 
     if (SEED_SAMPLE_DATA && seed) {
@@ -305,7 +326,10 @@ export async function createBranch(sourceId: string, auth: AuthContext, name?: s
   // branch silently ended up with its own 3 seeded rows instead of the
   // source's 4, since psql doesn't abort on a per-statement error by
   // default, so the colliding restore "succeeded" while doing nothing).
-  const branch = await createInstance(branchName, source.engine, source.owner_id, source.version, { seed: false });
+  const branch = await createInstance(branchName, source.engine, source.owner_id, source.version, {
+    seed: false,
+    tls: Boolean(source.tls_enabled),
+  });
 
   try {
     const ready = await waitForInstanceRunning(branch.id);

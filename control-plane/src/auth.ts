@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { db, sessionsRepo, apiTokensRepo, type ApiTokenRow, type InstanceRow } from "./db.js";
+import { sessionsRepo, apiTokensRepo, usersRepo, type ApiTokenRow, type InstanceRow } from "./db.js";
 
 const SESSION_COOKIE = "wharf_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -10,8 +10,7 @@ const cookieSecure = process.env.WHARF_COOKIE_SECURE === "true";
 
 export type AuthContext =
   | { kind: "admin" }
-  | { kind: "anonymous" }
-  | { kind: "user"; userId: string }
+  | { kind: "user"; userId: string; isSuperadmin: boolean }
   | { kind: "scoped"; instanceId: string; scope: "read" | "write"; tokenId: string };
 
 declare global {
@@ -22,21 +21,23 @@ declare global {
   }
 }
 
-function userCount(): number {
-  return (db.prepare(`SELECT COUNT(*) AS n FROM users`).get() as { n: number }).n;
-}
-
-/** False only in the bootstrap state: no WHARF_TOKEN configured and nobody has signed up yet. */
-export function authRequired(): boolean {
-  return Boolean(adminToken) || userCount() > 0;
+/**
+ * True until the very first account exists on this instance. There is no
+ * anonymous-access bootstrap window anymore — nothing works, for anyone,
+ * until that first account is created (see routes/auth.ts's signup
+ * handler, which promotes that first account to superadmin automatically).
+ * WHARF_TOKEN is a separate, independent credential and doesn't change this.
+ */
+export function needsSetup(): boolean {
+  return usersRepo.count() === 0;
 }
 
 if (!adminToken) {
   // eslint-disable-next-line no-console
-  console.warn(
-    "[wharf] WHARF_TOKEN is not set. Until the first account signs up, the API runs in " +
-      "single-user local/dev mode (no login required). Fine on a machine only you can reach — " +
-      "set WHARF_TOKEN before exposing this to anyone else, and have them sign up for real accounts."
+  console.log(
+    "[wharf] WHARF_TOKEN is not set. The first account created on this instance becomes its " +
+      "superadmin — full management over every database and every user account. Sign up for it " +
+      "at the web UI, or set WHARF_TOKEN for a separate service/CLI credential."
   );
 }
 
@@ -111,13 +112,22 @@ function resolveApiToken(presented: string): { instanceId: string; scope: "read"
   return { instanceId: row.instance_id, scope: row.scope, tokenId: row.id };
 }
 
-/** Throws (403) for a read-scoped token attempting to mutate — every route that writes calls this once req.auth is known. Every other kind (admin/anonymous/user, and write-scoped tokens) is unrestricted here; whether the caller may touch this *particular* instance at all is canAccessInstance's job, not this one's. */
+/** Throws (403) for a read-scoped token attempting to mutate — every route that writes calls this once req.auth is known. Every other kind (admin/user, and write-scoped tokens) is unrestricted here; whether the caller may touch this *particular* instance at all is canAccessInstance's job, not this one's. */
 export function requireWriteAccess(auth: AuthContext): void {
   if (auth.kind === "scoped" && auth.scope === "read") {
     const err = new Error("this token is read-only");
     (err as Error & { status?: number }).status = 403;
     throw err;
   }
+}
+
+/** Throws (403) for anything but the WHARF_TOKEN admin credential or a superadmin account — gates the platform-wide user-management routes (routes/admin.ts). */
+export function requireSuperadmin(auth: AuthContext): void {
+  if (auth.kind === "admin") return;
+  if (auth.kind === "user" && auth.isSuperadmin) return;
+  const err = new Error("superadmin access required");
+  (err as Error & { status?: number }).status = 403;
+  throw err;
 }
 
 /** Attaches req.auth on every request, without rejecting — routes decide what each AuthContext kind may do. */
@@ -140,15 +150,15 @@ export function identify(req: Request, _res: Response, next: NextFunction): void
 
   const userId = resolveSession(req);
   if (userId) {
-    req.auth = { kind: "user", userId };
-    next();
-    return;
-  }
-
-  if (!adminToken && userCount() === 0) {
-    req.auth = { kind: "anonymous" };
-    next();
-    return;
+    // The session points at a real row (not just an id) so isSuperadmin is
+    // always current — a promotion/demotion takes effect on this user's
+    // very next request, not just their next login.
+    const user = usersRepo.getById(userId);
+    if (user) {
+      req.auth = { kind: "user", userId, isSuperadmin: Boolean(user.is_superadmin) };
+      next();
+      return;
+    }
   }
 
   next();
@@ -163,7 +173,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 export function canAccessInstance(row: InstanceRow, auth: AuthContext): boolean {
-  if (auth.kind === "admin" || auth.kind === "anonymous") return true;
+  if (auth.kind === "admin") return true;
+  if (auth.kind === "user" && auth.isSuperadmin) return true;
   if (auth.kind === "scoped") return row.id === auth.instanceId;
   return row.owner_id === null || row.owner_id === auth.userId;
 }

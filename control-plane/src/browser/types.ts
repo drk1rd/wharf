@@ -12,13 +12,33 @@ export interface QueryResult {
   rowCount: number;
 }
 
+/**
+ * A single "column op value" condition for the data browser's filter
+ * builder (AND-combined when there's more than one) — deliberately not a
+ * general query language, just enough for someone who doesn't want to
+ * write SQL/Mongo query syntax by hand. "contains" maps to a substring
+ * match (SQL LIKE/ILIKE); every other op is a direct comparison.
+ */
+export interface BrowseFilter {
+  column: string;
+  op: "=" | "!=" | ">" | "<" | ">=" | "<=" | "contains";
+  value: string;
+}
+
 export interface BrowserAdapter {
   listObjects(connectionString: string): Promise<BrowseObject[]>;
+  /**
+   * filters is optional and, as of this writing, only honored by the SQL
+   * adapters (postgres/mysql/clickhouse) — MongoDB/Redis implementations
+   * are free to ignore it rather than half-implement a mismatched concept;
+   * the filter-builder UI itself only ever sends it for SQL engines.
+   */
   browseObject(
     connectionString: string,
     ref: { name: string; schema?: string },
     limit: number,
-    offset: number
+    offset: number,
+    filters?: BrowseFilter[]
   ): Promise<QueryResult>;
   /** Postgres: raw SQL. MongoDB: { collection, filter } encoded as JSON string. */
   runQuery(connectionString: string, query: string): Promise<QueryResult>;

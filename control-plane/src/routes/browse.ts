@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { internalConnectionString, requireRunningInstance } from "../instances.js";
 import { getBrowserAdapter } from "../browser/registry.js";
+import type { BrowseFilter } from "../browser/types.js";
 import { getManifest } from "../manifests/registry.js";
 import { askEnabled, generateQuery, listModels } from "../ask.js";
 import { usersRepo } from "../db.js";
@@ -10,6 +11,14 @@ import { recordAudit } from "../audit.js";
 import { alertSlowQuery } from "../alerts.js";
 
 export const browseRouter = Router();
+
+const FILTER_OPS = new Set(["=", "!=", ">", "<", ">=", "<=", "contains"]);
+
+function isBrowseFilter(v: unknown): v is BrowseFilter {
+  if (typeof v !== "object" || v === null) return false;
+  const f = v as Record<string, unknown>;
+  return typeof f.column === "string" && f.column.length > 0 && typeof f.op === "string" && FILTER_OPS.has(f.op) && typeof f.value === "string";
+}
 
 function adapterFor(instanceId: string, auth: AuthContext) {
   const row = requireRunningInstance(instanceId, auth);
@@ -36,11 +45,29 @@ browseRouter.get("/instances/:id/browse/objects/:name/rows", async (req, res) =>
     const limit = Number(req.query.limit ?? 100);
     const offset = Number(req.query.offset ?? 0);
     const schema = typeof req.query.schema === "string" ? req.query.schema : undefined;
+
+    let filters: BrowseFilter[] | undefined;
+    if (typeof req.query.filters === "string" && req.query.filters.trim()) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(req.query.filters);
+      } catch {
+        res.status(400).json({ error: "filters must be valid JSON" });
+        return;
+      }
+      if (!Array.isArray(parsed) || !parsed.every(isBrowseFilter)) {
+        res.status(400).json({ error: "filters must be an array of { column, op, value }" });
+        return;
+      }
+      filters = parsed;
+    }
+
     const result = await adapter.browseObject(
       connectionString,
       { name: req.params.name, schema },
       Number.isFinite(limit) ? limit : 100,
-      Number.isFinite(offset) ? offset : 0
+      Number.isFinite(offset) ? offset : 0,
+      filters
     );
     res.json(result);
   } catch (err) {

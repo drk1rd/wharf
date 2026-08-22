@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // Route-level validation and the schedule CRUD, all without touching
 // Docker — same bypass pattern as ownership.test.ts. Actually running a
@@ -14,7 +14,7 @@ const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
 const { setBackupSchedule, getBackupSchedule, runDueBackups, pruneBackups } = await import("../backups.js");
 const { backupsRepo } = await import("../db.js");
-const client = new Client(server.baseUrl);
+const client = await setupSuperadmin(server);
 
 const row = {
   id: randomUUID(),
@@ -34,6 +34,7 @@ const row = {
   disk_gb: 2,
   created_at: new Date().toISOString(),
   error: null,
+  tls_enabled: 0,
 };
 instancesRepo.insert(row);
 

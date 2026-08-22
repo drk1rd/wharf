@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, Client, setupSuperadmin } from "../testing/harness.js";
 
 // This is the actual security boundary the multi-user account system exists
 // to enforce: one user must never see, browse, or delete another user's
@@ -30,10 +30,17 @@ function fakeInstance(ownerId: string | null, name: string) {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;
 }
+
+// Consumes the "first account becomes superadmin" slot so alice/bob below
+// are both regular users — a superadmin can see every instance by design
+// (routes/instances.ts), which would otherwise silently defeat the very
+// ownership boundary these tests exist to prove.
+await setupSuperadmin(server);
 
 const alice = new Client(server.baseUrl);
 const bob = new Client(server.baseUrl);

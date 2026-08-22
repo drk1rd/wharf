@@ -2,6 +2,8 @@ import Docker from "dockerode";
 import net from "node:net";
 import { PassThrough } from "node:stream";
 import type { InstanceSecrets, ServiceManifest } from "./manifests/types.js";
+import { buildTarArchive } from "./tar.js";
+import type { LeafCert } from "./tls.js";
 
 const docker = new Docker({ socketPath: process.env.DOCKER_SOCKET ?? "/var/run/docker.sock" });
 
@@ -30,18 +32,27 @@ export interface CreatedContainer {
   hostPort: number;
 }
 
+/** Wraps a value in single quotes for a POSIX shell, escaping any embedded single quotes. */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export async function createInstanceContainer(opts: {
   instanceId: string;
   manifest: ServiceManifest;
   version: string;
   secrets: InstanceSecrets;
+  /** Present only when the caller (instances.ts) has already issued a leaf cert and this engine's manifest supports TLS. */
+  tlsCert?: LeafCert;
 }): Promise<CreatedContainer> {
-  const { instanceId, manifest, version, secrets } = opts;
+  const { instanceId, manifest, version, secrets, tlsCert } = opts;
   const image = manifest.image(version);
   await ensureImage(image);
 
   const volumeName = `wharf-${instanceId}`;
   await docker.createVolume({ Name: volumeName });
+
+  const useTls = Boolean(tlsCert && manifest.tls);
 
   // From here on, any failure must remove the volume we just created —
   // otherwise a failed create (bad image, no port available, ...) leaks it
@@ -49,11 +60,36 @@ export async function createInstanceContainer(opts: {
   // later (the row is only updated with it once this function returns).
   try {
     const portKey = `${manifest.containerPort}/tcp`;
+
+    let entrypoint: string[] | undefined;
+    let cmd: string[] | undefined;
+    if (useTls && manifest.tls) {
+      const { certDir, runtimeUser, entrypoint: baseEntrypoint, args } = manifest.tls;
+      const argList = args(secrets, certDir).map(shellQuote).join(" ");
+      // putArchive always writes as root regardless of the container's own
+      // runtime user (it's the same mechanism `docker cp` uses), and several
+      // engines (Postgres) refuse to start with a key file the server
+      // process can't read, or that's group/world-readable. So: run as root
+      // (the container's default user before the image's own entrypoint
+      // drops privileges), fix ownership/permissions, then exec the image's
+      // normal entrypoint with the TLS-flagged args — identical to what
+      // would have run anyway, just with the certs usable first.
+      const wrapper =
+        `chown ${runtimeUser}:${runtimeUser} ${certDir}/server.crt ${certDir}/server.key ${certDir}/ca.crt ${certDir}/combined.pem 2>/dev/null; ` +
+        `chmod 600 ${certDir}/server.key ${certDir}/combined.pem 2>/dev/null; ` +
+        `exec ${baseEntrypoint} ${argList}`;
+      entrypoint = ["sh", "-c"];
+      cmd = [wrapper];
+    } else {
+      cmd = manifest.command ? manifest.command(secrets) : undefined;
+    }
+
     const container = await docker.createContainer({
       name: `wharf-${instanceId}`,
       Image: image,
       Env: Object.entries(manifest.env(secrets)).map(([k, v]) => `${k}=${v}`),
-      Cmd: manifest.command ? manifest.command(secrets) : undefined,
+      Entrypoint: entrypoint,
+      Cmd: cmd,
       ExposedPorts: { [portKey]: {} },
       Labels: { "wharf.instance": instanceId, "wharf.engine": manifest.id },
       HostConfig: {
@@ -64,6 +100,22 @@ export async function createInstanceContainer(opts: {
         Memory: manifest.resourceDefaults.memoryMb * 1024 * 1024,
       },
     });
+
+    if (useTls && tlsCert && manifest.tls) {
+      // A created-but-not-started container already has a real (writable)
+      // root filesystem from its image layers, so putArchive works before
+      // start() — path: "/" with the cert dir baked into each entry's name
+      // (rather than certDir as the putArchive path) so Docker creates the
+      // directory itself rather than requiring it to already exist.
+      const relDir = manifest.tls.certDir.replace(/^\//, "");
+      const files = [
+        { name: `${relDir}/server.crt`, content: Buffer.from(tlsCert.certPem, "utf8"), mode: 0o644 },
+        { name: `${relDir}/server.key`, content: Buffer.from(tlsCert.keyPem, "utf8"), mode: 0o600 },
+        { name: `${relDir}/ca.crt`, content: Buffer.from(tlsCert.caCertPem, "utf8"), mode: 0o644 },
+        { name: `${relDir}/combined.pem`, content: Buffer.from(tlsCert.combinedPem, "utf8"), mode: 0o600 },
+      ];
+      await container.putArchive(buildTarArchive(files), { path: "/" });
+    }
 
     try {
       await container.start();

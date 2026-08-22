@@ -1,11 +1,13 @@
-import type { BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
+import type { BrowseFilter, BrowseObject, BrowserAdapter, QueryResult } from "./types.js";
 
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Safely backtick-quotes a ClickHouse identifier that isn't allowed to be parameterized. */
 export function quoteIdent(ident: string): string {
   if (!IDENT_RE.test(ident)) {
-    throw new Error(`invalid identifier: ${ident}`);
+    const err = new Error(`invalid identifier: ${ident}`);
+    (err as Error & { status?: number }).status = 400;
+    throw err;
   }
   return `\`${ident}\``;
 }
@@ -65,6 +67,36 @@ function escapeLiteral(value: string): string {
   return `'${value.replace(/\\/g, "\\\\").replace(/'/g, "\\'")}'`;
 }
 
+const FILTER_OPS: Record<BrowseFilter["op"], string> = {
+  "=": "=",
+  "!=": "!=",
+  ">": ">",
+  "<": "<",
+  ">=": ">=",
+  "<=": "<=",
+  contains: "LIKE",
+};
+
+/**
+ * ClickHouse's HTTP interface has no real bind parameters (see getRowById
+ * below), so filter values are escaped as string literals rather than
+ * parameterized — same reasoning, same escapeLiteral helper.
+ */
+function buildWhere(filters: BrowseFilter[] | undefined): string {
+  if (!filters || filters.length === 0) return "";
+  const parts = filters.map((f) => {
+    const sqlOp = FILTER_OPS[f.op];
+    if (!sqlOp) {
+      const err = new Error(`invalid filter operator: ${f.op}`);
+      (err as Error & { status?: number }).status = 400;
+      throw err;
+    }
+    const value = f.op === "contains" ? `%${f.value}%` : f.value;
+    return `${quoteIdent(f.column)} ${sqlOp} ${escapeLiteral(value)}`;
+  });
+  return `WHERE ${parts.join(" AND ")}`;
+}
+
 export const clickhouseAdapter: BrowserAdapter = {
   async listObjects(connectionString): Promise<BrowseObject[]> {
     const { rows } = await query(
@@ -77,11 +109,12 @@ export const clickhouseAdapter: BrowserAdapter = {
     });
   },
 
-  async browseObject(connectionString, ref, limit, offset): Promise<QueryResult> {
+  async browseObject(connectionString, ref, limit, offset, filters): Promise<QueryResult> {
     const table = quoteIdent(ref.name);
     const safeLimit = Math.min(Math.max(Math.trunc(limit), 1), 1000);
     const safeOffset = Math.max(Math.trunc(offset), 0);
-    const { columns, rows } = await query(connectionString, `SELECT * FROM ${table} LIMIT ${safeLimit} OFFSET ${safeOffset}`);
+    const where = buildWhere(filters);
+    const { columns, rows } = await query(connectionString, `SELECT * FROM ${table} ${where} LIMIT ${safeLimit} OFFSET ${safeOffset}`);
     return { columns, rows, rowCount: rows.length };
   },
 

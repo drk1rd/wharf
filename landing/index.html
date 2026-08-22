@@ -49,7 +49,12 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  img { max-width: 100%; display: block; }
+  /* height: auto is load-bearing, not decorative — the <img> tags below
+     carry explicit width/height attributes (for layout-shift prevention),
+     and without this, the browser leaves `height` pinned at that absolute
+     pixel value while `max-width` shrinks the rendered width, stretching
+     the image vertically instead of scaling it proportionally. */
+  img { max-width: 100%; height: auto; display: block; }
 
   a { color: inherit; }
 

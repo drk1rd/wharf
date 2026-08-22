@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, setupSuperadmin } from "../testing/harness.js";
 
 // WHARF_MAX_INSTANCES caps instance *count*, but live resize lets any single
 // instance grow to 16 cores / 32GB with no ceiling of its own — a handful of
@@ -11,7 +11,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // ownership.test.ts, so these run everywhere without a daemon.
 const server = await startTestServer({ WHARF_MAX_TOTAL_CPU: "2", WHARF_MAX_TOTAL_MEMORY_MB: "1024" });
 const { instancesRepo } = await import("../db.js");
-const client = new Client(server.baseUrl);
+const client = await setupSuperadmin(server);
 
 function fakeRunningInstance(cpu: string, memoryMb: number) {
   const row = {
@@ -32,6 +32,7 @@ function fakeRunningInstance(cpu: string, memoryMb: number) {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;

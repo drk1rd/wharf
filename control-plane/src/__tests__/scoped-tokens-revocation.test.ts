@@ -3,13 +3,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { startTestServer, Client } from "../testing/harness.js";
 
-// A dedicated file, not a case inside scoped-tokens.test.ts: proving
-// revocation actually matters needs anonymous bootstrap mode turned OFF
-// (WHARF_TOKEN set), otherwise every request succeeds regardless of the
-// scoped token's validity and the assertion would be meaningless. Env vars
-// for a test file are fixed at import time (see harness.ts's own comment),
-// so a differently-configured server can't share a process with
-// scoped-tokens.test.ts's anonymous-mode one.
+// A dedicated file, not a case inside scoped-tokens.test.ts: this uses the
+// WHARF_TOKEN admin credential directly rather than a superadmin session, to
+// keep the revocation proof independent of the account/session machinery
+// entirely. Env vars for a test file are fixed at import time (see
+// harness.ts's own comment), so this needs its own process rather than
+// sharing scoped-tokens.test.ts's server.
 const ADMIN_TOKEN = "admin-secret-for-revocation-test";
 const server = await startTestServer({ WHARF_TOKEN: ADMIN_TOKEN });
 const { instancesRepo } = await import("../db.js");
@@ -34,6 +33,7 @@ const instance = (() => {
     disk_gb: 2,
     created_at: new Date().toISOString(),
     error: null,
+    tls_enabled: 0,
   };
   instancesRepo.insert(row);
   return row;

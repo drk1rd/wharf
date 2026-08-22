@@ -6,8 +6,8 @@ import { hashPassword, isValidEmail, isValidPassword, verifyPassword } from "../
 
 export const authRouter = Router();
 
-function publicUser(user: { id: string; email: string; default_model: string | null }) {
-  return { id: user.id, email: user.email, defaultModel: user.default_model };
+function publicUser(user: { id: string; email: string; default_model: string | null; is_superadmin: number }) {
+  return { id: user.id, email: user.email, defaultModel: user.default_model, isSuperadmin: Boolean(user.is_superadmin) };
 }
 
 authRouter.post("/auth/signup", (req, res) => {
@@ -25,11 +25,19 @@ authRouter.post("/auth/signup", (req, res) => {
     return;
   }
 
+  // The very first account on a fresh instance becomes its superadmin —
+  // this is the "prompt for a superadmin on first boot" mechanism itself:
+  // the web UI just labels this same signup call differently when
+  // needsSetup() is true (see AuthPage.tsx). Every account after it is a
+  // regular user, same as before.
+  const isFirstAccount = usersRepo.count() === 0;
+
   const user = {
     id: randomUUID(),
     email: email.toLowerCase(),
     password_hash: hashPassword(password),
     default_model: null,
+    is_superadmin: isFirstAccount ? 1 : 0,
     created_at: new Date().toISOString(),
   };
   usersRepo.insert(user);

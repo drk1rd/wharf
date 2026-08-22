@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { startTestServer, Client } from "../testing/harness.js";
+import { startTestServer, setupSuperadmin } from "../testing/harness.js";
 
 // Route-level input validation only — reaching the real import path needs a
 // real running container, already covered for real by the Docker-gated
@@ -10,7 +10,7 @@ import { startTestServer, Client } from "../testing/harness.js";
 // unreachable) instance, same bypass-Docker pattern as ownership.test.ts.
 const server = await startTestServer();
 const { instancesRepo } = await import("../db.js");
-const client = new Client(server.baseUrl);
+const client = await setupSuperadmin(server);
 
 const row = {
   id: randomUUID(),
@@ -30,6 +30,7 @@ const row = {
   disk_gb: 2,
   created_at: new Date().toISOString(),
   error: null,
+  tls_enabled: 0,
 };
 instancesRepo.insert(row);
 

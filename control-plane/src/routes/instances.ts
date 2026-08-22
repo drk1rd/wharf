@@ -2,6 +2,7 @@ import { Router, type Response } from "express";
 import { instancesRepo, type InstanceRow } from "../db.js";
 import { listManifests } from "../manifests/registry.js";
 import { connectionInfo, createBranch, createInstance, deleteInstance, requireOwnedInstance, requireRunningInstance, resizeInstance } from "../instances.js";
+import { caCertificatePem } from "../tls.js";
 import { getContainerLogs, getContainerStats } from "../docker.js";
 import { backupSupported, createBackup, getBackupSchedule, listBackups, restoreBackup, setBackupSchedule } from "../backups.js";
 import { listApiTokens, mintApiToken, ownerIdFor, requireWriteAccess, revokeApiToken } from "../auth.js";
@@ -24,6 +25,7 @@ function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
   const conn = connectionInfo(row);
   return {
     id: row.id,
+    ownerId: row.owner_id,
     name: row.name,
     engine: row.engine,
     version: row.version,
@@ -32,6 +34,7 @@ function publicInstance(row: ReturnType<typeof instancesRepo.get>) {
     error: row.error,
     resources: { cpu: row.cpu, memoryMb: row.memory_mb, diskGb: row.disk_gb },
     connection: conn,
+    tlsEnabled: Boolean(row.tls_enabled),
     backupSupported: backupSupported(row.engine),
     backupSchedule: toPublicSchedule(getBackupSchedule(row.id)),
   };
@@ -49,17 +52,28 @@ instancesRouter.get("/engines", (_req, res) => {
       displayName: m.displayName,
       versions: m.versions,
       defaultVersion: m.defaultVersion,
+      tlsSupported: Boolean(m.tls),
     }))
   );
+});
+
+// The CA's public certificate — safe to expose unauthenticated (it's not a
+// secret; it's what a deployer or client imports to trust self-signed
+// instance certs). The CA's private key never leaves tls.ts.
+instancesRouter.get("/tls/ca-certificate", (_req, res) => {
+  res.type("text/plain").send(caCertificatePem());
 });
 
 instancesRouter.get("/instances", (req, res) => {
   const auth = req.auth!;
   // A scoped token only ever sees the one instance it's bound to — never
-  // the full list a "list all" call would otherwise return.
+  // the full list a "list all" call would otherwise return. A superadmin
+  // sees every instance, same as the WHARF_TOKEN admin credential.
   const rows: InstanceRow[] =
     auth.kind === "user"
-      ? instancesRepo.listForOwner(auth.userId)
+      ? auth.isSuperadmin
+        ? instancesRepo.list()
+        : instancesRepo.listForOwner(auth.userId)
       : auth.kind === "scoped"
         ? [instancesRepo.get(auth.instanceId)].filter((r): r is InstanceRow => Boolean(r))
         : instancesRepo.list();
@@ -71,9 +85,13 @@ instancesRouter.post("/instances", async (req, res) => {
     res.status(403).json({ error: "a scoped token can't create new instances — it's bound to the one it was minted for" });
     return;
   }
-  const { name, engine, version } = req.body ?? {};
+  const { name, engine, version, tls } = req.body ?? {};
   if (typeof engine !== "string") {
     res.status(400).json({ error: "engine is required" });
+    return;
+  }
+  if (tls !== undefined && typeof tls !== "boolean") {
+    res.status(400).json({ error: "tls must be a boolean" });
     return;
   }
   try {
@@ -81,7 +99,8 @@ instancesRouter.post("/instances", async (req, res) => {
       typeof name === "string" && name.trim() ? name.trim() : `${engine}-${Date.now()}`,
       engine,
       ownerIdFor(req.auth!),
-      version
+      version,
+      { tls }
     );
     res.status(201).json(publicInstance(row));
   } catch (err) {

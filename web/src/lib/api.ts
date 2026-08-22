@@ -28,10 +28,12 @@ export interface Engine {
   displayName: string;
   versions: string[];
   defaultVersion: string;
+  tlsSupported: boolean;
 }
 
 export interface Instance {
   id: string;
+  ownerId: string | null;
   name: string;
   engine: string;
   version: string;
@@ -40,8 +42,16 @@ export interface Instance {
   error: string | null;
   resources: { cpu: string; memoryMb: number; diskGb: number };
   connection: { host: string; port: number; connectionString: string } | null;
+  tlsEnabled: boolean;
   backupSupported: boolean;
   backupSchedule: { intervalHours: number; retentionCount: number; lastRunAt: string | null } | null;
+}
+
+export interface DeploymentSettings {
+  publicHost: string | null;
+  hostKind: "ip" | "domain";
+  defaultTls: boolean;
+  publicHostLockedByEnv: boolean;
 }
 
 export interface AuditLogEntry {
@@ -81,6 +91,12 @@ export interface QueryResult {
   rowCount: number;
 }
 
+export interface BrowseFilter {
+  column: string;
+  op: "=" | "!=" | ">" | "<" | ">=" | "<=" | "contains";
+  value: string;
+}
+
 export interface Backup {
   id: string;
   instance_id: string;
@@ -100,6 +116,15 @@ export interface User {
   id: string;
   email: string;
   defaultModel: string | null;
+  isSuperadmin: boolean;
+}
+
+export interface ManagedUser {
+  id: string;
+  email: string;
+  isSuperadmin: boolean;
+  createdAt: string;
+  instanceCount: number;
 }
 
 export interface OpenRouterModel {
@@ -109,7 +134,10 @@ export interface OpenRouterModel {
 }
 
 export const api = {
-  getConfig: () => request<{ askEnabled: boolean; authRequired: boolean }>("/config"),
+  getConfig: () => request<{ askEnabled: boolean; needsSetup: boolean }>("/config"),
+  getDeploymentSettings: () => request<DeploymentSettings>("/deployment-settings"),
+  updateDeploymentSettings: (patch: { publicHost?: string; hostKind?: "ip" | "domain"; defaultTls?: boolean }) =>
+    request<DeploymentSettings>("/deployment-settings", { method: "PATCH", body: JSON.stringify(patch) }),
   signup: (email: string, password: string) =>
     request<User>("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }),
   login: (email: string, password: string) =>
@@ -123,15 +151,17 @@ export const api = {
   listEngines: () => request<Engine[]>("/engines"),
   listInstances: () => request<Instance[]>("/instances"),
   getInstance: (id: string) => request<Instance>(`/instances/${id}`),
-  createInstance: (name: string, engine: string, version?: string) =>
-    request<Instance>("/instances", { method: "POST", body: JSON.stringify({ name, engine, version }) }),
+  createInstance: (name: string, engine: string, version?: string, tls?: boolean) =>
+    request<Instance>("/instances", { method: "POST", body: JSON.stringify({ name, engine, version, tls }) }),
+  caCertificate: () => request<string>("/tls/ca-certificate"),
   deleteInstance: (id: string) => request<void>(`/instances/${id}`, { method: "DELETE" }),
   getMetrics: (id: string) => request<ContainerStats>(`/instances/${id}/metrics`),
   getLogs: (id: string) => request<string>(`/instances/${id}/logs`),
   listObjects: (id: string) => request<BrowseObject[]>(`/instances/${id}/browse/objects`),
-  browseObject: (id: string, name: string, schema: string | undefined, limit: number, offset: number) => {
+  browseObject: (id: string, name: string, schema: string | undefined, limit: number, offset: number, filters?: BrowseFilter[]) => {
     const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (schema) params.set("schema", schema);
+    if (filters && filters.length > 0) params.set("filters", JSON.stringify(filters));
     return request<QueryResult>(`/instances/${id}/browse/objects/${encodeURIComponent(name)}/rows?${params}`);
   },
   runQuery: (id: string, query: string) =>
@@ -163,4 +193,28 @@ export const api = {
   revokeToken: (id: string, tokenId: string) => request<void>(`/instances/${id}/tokens/${tokenId}`, { method: "DELETE" }),
   listAuditLog: (id: string) => request<AuditLogEntry[]>(`/instances/${id}/audit-log`),
   createBranch: (id: string, name?: string) => request<Instance>(`/instances/${id}/branches`, { method: "POST", body: JSON.stringify({ name }) }),
+
+  // Auto-generated per-table REST API (see control-plane/src/routes/tableApi.ts) —
+  // used by the data browser's inline row editing, SQL engines only.
+  insertRow: (id: string, table: string, row: Record<string, unknown>) =>
+    request<{ inserted: number }>(`/instances/${id}/api/${encodeURIComponent(table)}`, {
+      method: "POST",
+      body: JSON.stringify(row),
+    }),
+  updateRow: (id: string, table: string, idColumn: string, rowId: string, patch: Record<string, unknown>) =>
+    request<{ updated: number }>(
+      `/instances/${id}/api/${encodeURIComponent(table)}/${encodeURIComponent(rowId)}?idColumn=${encodeURIComponent(idColumn)}`,
+      { method: "PATCH", body: JSON.stringify(patch) }
+    ),
+  deleteRow: (id: string, table: string, idColumn: string, rowId: string) =>
+    request<void>(
+      `/instances/${id}/api/${encodeURIComponent(table)}/${encodeURIComponent(rowId)}?idColumn=${encodeURIComponent(idColumn)}`,
+      { method: "DELETE" }
+    ),
+
+  // Superadmin-only platform management (see control-plane/src/routes/admin.ts).
+  listUsers: () => request<ManagedUser[]>("/users"),
+  setUserSuperadmin: (id: string, isSuperadmin: boolean) =>
+    request<ManagedUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify({ isSuperadmin }) }),
+  deleteUser: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
 };

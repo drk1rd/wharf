@@ -1,11 +1,13 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { identify, requireAuth, authRequired } from "./auth.js";
+import { identify, requireAuth, needsSetup } from "./auth.js";
 import { authRouter } from "./routes/auth.js";
 import { instancesRouter } from "./routes/instances.js";
 import { browseRouter } from "./routes/browse.js";
 import { tableApiRouter } from "./routes/tableApi.js";
+import { adminRouter } from "./routes/admin.js";
+import { settingsRouter } from "./routes/settings.js";
 import { askEnabled } from "./ask.js";
 
 export function buildApp(): express.Express {
@@ -18,14 +20,16 @@ export function buildApp(): express.Express {
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
   app.get("/api/config", (_req, res) => {
-    res.json({ askEnabled: askEnabled(), authRequired: authRequired() });
+    res.json({ askEnabled: askEnabled(), needsSetup: needsSetup() });
   });
 
   app.use("/api", authRouter);
+  app.use("/api", settingsRouter);
 
   app.use("/api", requireAuth, instancesRouter);
   app.use("/api", requireAuth, browseRouter);
   app.use("/api", requireAuth, tableApiRouter);
+  app.use("/api", requireAuth, adminRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     // eslint-disable-next-line no-console

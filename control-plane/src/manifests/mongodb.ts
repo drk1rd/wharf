@@ -46,4 +46,36 @@ export const mongodbManifest: ServiceManifest = {
     ],
   },
   resourceDefaults: { cpu: "1", memoryMb: 512, diskGb: 2 },
+  tls: {
+    certDir: "/wharf-tls",
+    runtimeUser: "mongodb",
+    entrypoint: "docker-entrypoint.sh",
+    // mongod wants cert+key in one PEM for --tlsCertificateKeyFile, hence
+    // combined.pem (see tls.ts) rather than separate --tlsCertificateFile /
+    // --tlsPrivateKeyFile flags (also supported, but this is mongod's own
+    // documented preferred form). --bind_ip_all is spelled out explicitly
+    // here rather than relying on docker-entrypoint.sh's own default-args
+    // heuristic, since this manifest is already overriding the args docker-entrypoint.sh
+    // would otherwise infer from a bare "mongod".
+    args: (_s, certDir) => [
+      "mongod",
+      "--bind_ip_all",
+      "--tlsMode", "preferTLS",
+      "--tlsCertificateKeyFile", `${certDir}/combined.pem`,
+      "--tlsCAFile", `${certDir}/ca.crt`,
+      // Setting --tlsCAFile at all makes mongod default to REQUIRING a
+      // client certificate signed by it (net.tls.allowConnectionsWithoutCertificates
+      // defaults to false the moment a CA file is configured) — this is
+      // server-only encryption, not mutual TLS, so clients (including the
+      // control plane's own probe/browser-adapter connections, which never
+      // present a client cert) need this explicitly or mongod silently
+      // closes every connection right after the TLS handshake.
+      "--tlsAllowConnectionsWithoutCertificates",
+    ],
+    // Both spelled out directly in the URI — the MongoDB driver (and the
+    // official connection-string spec) reads tls/tlsAllowInvalidCertificates
+    // straight from query params, no client-side code changes needed.
+    internalConnectionSuffix: () => "&tls=true&tlsAllowInvalidCertificates=true",
+    externalConnectionSuffix: () => "&tls=true&tlsAllowInvalidCertificates=true",
+  },
 };
